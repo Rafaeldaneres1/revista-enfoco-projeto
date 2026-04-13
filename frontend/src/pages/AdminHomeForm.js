@@ -769,7 +769,7 @@ const AdminHomeForm = () => {
                   <div>
                     <h3 className="font-display text-xl font-bold text-charcoal">Colunas da home</h3>
                     <p className="text-sm text-stone">
-                      Escolha quais colunas aparecem nessa faixa, defina a ordem e troque a imagem se quiser.
+                      Todas as colunas publicadas aparecem automaticamente nessa faixa. Use esta area apenas se quiser ajustar a ordem das primeiras ou trocar alguma imagem na home.
                     </p>
                   </div>
                   <button
@@ -851,7 +851,7 @@ const AdminHomeForm = () => {
                   </div>
                 ) : (
                   <div className="rounded-[28px] border border-dashed border-charcoal/12 bg-white/40 p-6 text-sm text-stone">
-                    Nenhuma coluna foi escolhida ainda. Se deixar vazio, a home continua exibindo automaticamente as colunas mais recentes.
+                    Nenhuma coluna recebeu ajuste manual ainda. A home continua exibindo automaticamente todas as colunas publicadas.
                   </div>
                 )}
               </div>

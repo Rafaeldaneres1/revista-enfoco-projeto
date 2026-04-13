@@ -37,7 +37,7 @@ const buildFallbackHomeSettings = () => ({
   columns_link_label: siteContent.home.columnsLinkLabel || 'Ver Colunas',
   columns_empty_message:
     siteContent.home.columnsEmptyMessage ||
-    'As colunas publicadas aparecerão aqui assim que a curadoria editorial desta seção for preenchida.'
+    'As colunas publicadas aparecerão aqui automaticamente assim que forem cadastradas no admin.'
 });
 
 const sanitizeText = (value = '') =>

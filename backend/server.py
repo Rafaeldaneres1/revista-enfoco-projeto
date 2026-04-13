@@ -1440,6 +1440,12 @@ async def get_home_data():
             if len(ordered_editions) >= 6:
                 break
 
+    column_overrides = {
+        item.get("column_id"): item
+        for item in home_column_items
+        if item.get("column_id")
+    }
+
     ordered_columns = []
     used_column_ids = set()
 
@@ -1458,17 +1464,22 @@ async def get_home_data():
         ordered_columns.append(selected_column)
         used_column_ids.add(column_id)
 
-    if not ordered_columns:
-        for column in latest_columns:
-            ordered_columns.append(column.copy())
-            if len(ordered_columns) >= 8:
-                break
+    for column in latest_columns:
+        if column["id"] in used_column_ids:
+            continue
+
+        selected_column = column.copy()
+        override_item = column_overrides.get(column["id"])
+        if override_item and override_item.get("override_image"):
+            selected_column["featured_image"] = override_item["override_image"]
+
+        ordered_columns.append(selected_column)
 
     return {
         "featured_post": featured_post,
         "recent_posts": recent_posts[:3],
         "recommended_posts": recommended_posts[:3],
-        "columns": ordered_columns[:8],
+        "columns": ordered_columns,
         "events": upcoming_events,
         "featured_edition": featured_edition,
         "editions": ordered_editions
