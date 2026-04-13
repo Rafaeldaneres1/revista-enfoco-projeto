@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ import logging
 import re
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
-from typing import List, Optional
+from typing import Dict, List, Optional
 import uuid
 import mimetypes
 from datetime import datetime, timezone, timedelta
@@ -17,6 +18,10 @@ from passlib.context import CryptContext
 import jwt
 import shutil
 from slugify import slugify
+from io import BytesIO
+from collections import defaultdict, deque
+from xml.etree import ElementTree
+from PIL import Image, UnidentifiedImageError
 
 try:
     import fitz  # PyMuPDF
@@ -24,17 +29,26 @@ except ImportError:  # pragma: no cover - optional dependency in some environmen
     fitz = None
 
 ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / '.env')
 uploads_dir_env = os.environ.get("UPLOADS_DIR")
 UPLOADS_DIR = Path(uploads_dir_env).expanduser() if uploads_dir_env else ROOT_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-load_dotenv(ROOT_DIR / '.env')
+
+MAX_IMAGE_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
+LOGIN_RATE_LIMIT_ATTEMPTS = 5
+LOGIN_RATE_LIMIT_WINDOW = timedelta(minutes=15)
+ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp", ".tiff"}
 
 
 def parse_cors_origins(raw_origins: Optional[str]) -> List[str]:
     if not raw_origins:
-        return ["*"]
+        raise RuntimeError("CORS_ORIGINS environment variable is required")
     origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-    return origins or ["*"]
+    if not origins:
+        raise RuntimeError("CORS_ORIGINS environment variable must contain at least one origin")
+    if "*" in origins:
+        raise RuntimeError("CORS_ORIGINS cannot contain wildcard '*' in production configuration")
+    return origins
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -45,12 +59,15 @@ db = client[os.environ['DB_NAME']]
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT settings
-SECRET_KEY = os.environ.get('SECRET_KEY', 'revista-enfoco-secret-key-change-in-production')
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 # Security
 security = HTTPBearer()
+login_attempts: Dict[str, deque] = defaultdict(deque)
 
 # Create the main app
 app = FastAPI(title="Revista Enfoco API")
@@ -347,6 +364,65 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+def ensure_admin(current_user: User) -> None:
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can perform this action"
+        )
+
+def _prune_login_attempts(client_key: str, now: datetime) -> deque:
+    attempts = login_attempts[client_key]
+    cutoff = now - LOGIN_RATE_LIMIT_WINDOW
+    while attempts and attempts[0] < cutoff:
+        attempts.popleft()
+    return attempts
+
+def enforce_login_rate_limit(client_key: str) -> None:
+    now = datetime.now(timezone.utc)
+    attempts = _prune_login_attempts(client_key, now)
+    if len(attempts) >= LOGIN_RATE_LIMIT_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later."
+        )
+    attempts.append(now)
+
+def clear_login_rate_limit(client_key: str) -> None:
+    login_attempts.pop(client_key, None)
+
+def get_request_client_key(request: Request, email: Optional[str] = None) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else ""
+    if not client_ip and request.client:
+        client_ip = request.client.host
+    return f"{client_ip or 'unknown'}:{(email or '').strip().lower()}"
+
+def validate_and_prepare_image_upload(file: UploadFile, file_bytes: bytes, file_extension: str) -> None:
+    if len(file_bytes) > MAX_IMAGE_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image file is too large. Maximum size is {MAX_IMAGE_UPLOAD_SIZE // (1024 * 1024)} MB."
+        )
+
+    content_type = (file.content_type or "").lower()
+    normalized_extension = file_extension.lower()
+
+    if normalized_extension == ".svg" or content_type == "image/svg+xml":
+        try:
+            root = ElementTree.fromstring(file_bytes.decode("utf-8"))
+        except (UnicodeDecodeError, ElementTree.ParseError):
+            raise HTTPException(status_code=400, detail="Invalid SVG image")
+        if not root.tag.lower().endswith("svg"):
+            raise HTTPException(status_code=400, detail="Invalid SVG image")
+        return
+
+    try:
+        with Image.open(BytesIO(file_bytes)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -560,7 +636,8 @@ async def enforce_home_highlight_rules(post_dict: dict, current_post_id: Optiona
 # ============ AUTH ROUTES ============
 
 @api_router.post("/auth/register", response_model=User)
-async def register(user_data: UserCreate):
+async def register(user_data: UserCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
@@ -579,7 +656,9 @@ async def register(user_data: UserCreate):
     return user_obj
 
 @api_router.post("/auth/login", response_model=Token)
-async def login(user_data: UserLogin):
+async def login(user_data: UserLogin, request: Request):
+    client_key = get_request_client_key(request, user_data.email)
+    enforce_login_rate_limit(client_key)
     user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
@@ -587,6 +666,7 @@ async def login(user_data: UserLogin):
     if not verify_password(user_data.password, user['hashed_password']):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     
+    clear_login_rate_limit(client_key)
     access_token = create_access_token(data={"sub": user['id']})
     
     if isinstance(user.get('created_at'), str):
@@ -1187,19 +1267,22 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
 
+    file_extension = Path(file.filename).suffix.lower()
     content_type = (file.content_type or "").lower()
-    if not content_type.startswith("image/"):
+    if not content_type.startswith("image/") and file_extension not in ALLOWED_IMAGE_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Only image uploads are allowed")
 
-    file_extension = Path(file.filename).suffix.lower()
     if not file_extension:
         file_extension = mimetypes.guess_extension(content_type) or ".jpg"
+
+    file_bytes = await file.read()
+    validate_and_prepare_image_upload(file, file_bytes, file_extension)
 
     unique_filename = f"{uuid.uuid4()}{file_extension}"
     file_path = UPLOADS_DIR / unique_filename
 
     with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_bytes)
 
     media_obj = Media(
         filename=file.filename,
@@ -1255,8 +1338,6 @@ async def get_media(current_user: User = Depends(get_current_user)):
             media['uploaded_at'] = datetime.fromisoformat(media['uploaded_at'])
     
     return media_list
-
-from fastapi.responses import FileResponse
 
 @api_router.get("/media/{filename}")
 async def get_media_file(filename: str):

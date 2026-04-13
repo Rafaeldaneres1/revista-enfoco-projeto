@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import './App.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -35,6 +35,16 @@ import AdminTeamForm from './pages/AdminTeamForm';
 import AdminCategories from './pages/AdminCategories';
 import AdminCategoryForm from './pages/AdminCategoryForm';
 
+function LegacyPostRedirect() {
+  const { slug } = useParams();
+  return <Navigate replace to={`/noticias/${slug}`} />;
+}
+
+function LegacyColumnRedirect() {
+  const { slug } = useParams();
+  return <Navigate replace to={`/colunas/${slug}`} />;
+}
+
 function App() {
   return (
     <Router>
@@ -47,10 +57,10 @@ function App() {
             <Route path="/quem-somos" element={<About />} />
             <Route path="/noticias" element={<PostsPage />} />
             <Route path="/noticias/:slug" element={<SinglePost />} />
-            <Route path="/materia/:slug" element={<SinglePost />} />
+            <Route path="/materia/:slug" element={<LegacyPostRedirect />} />
             <Route path="/colunas" element={<ColumnsPage />} />
             <Route path="/colunas/:slug" element={<SingleColumn />} />
-            <Route path="/coluna/:slug" element={<SingleColumn />} />
+            <Route path="/coluna/:slug" element={<LegacyColumnRedirect />} />
             <Route path="/eventos" element={<EventsPage />} />
             <Route path="/eventos/:slug" element={<SingleEvent />} />
             <Route path="/edicoes" element={<EditionsPage />} />

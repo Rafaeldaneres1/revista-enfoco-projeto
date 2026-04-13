@@ -68,9 +68,9 @@ const SinglePost = () => {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-charcoal mb-4">Materia nao encontrada</h2>
+          <h2 className="text-2xl font-bold text-charcoal mb-4">Matéria não encontrada</h2>
           <Link to="/noticias" className="text-royal-blue hover:underline">
-            Voltar para noticias
+            Voltar para notícias
           </Link>
         </div>
       </div>
@@ -163,7 +163,7 @@ const SinglePost = () => {
                     to="/noticias"
                     className="border border-gray-200 px-5 py-3 text-sm uppercase tracking-[0.12em] hover:border-charcoal transition-colors"
                   >
-                    Mais noticias
+                    Mais notícias
                   </Link>
                   <Link
                     to="/colunas"
@@ -190,7 +190,7 @@ const SinglePost = () => {
             to="/noticias"
             className="inline-flex bg-royal-blue hover:bg-royal-blue-dark text-white px-8 py-4 text-sm font-semibold tracking-wide uppercase transition-colors"
           >
-            Voltar para noticias
+            Voltar para notícias
           </Link>
         </ScrollReveal>
       </div>
