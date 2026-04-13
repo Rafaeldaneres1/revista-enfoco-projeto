@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: revista-enfoco-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: revista-enfoco-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 5
+    envVars:
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        value: revista_enfoco
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SECRET_KEY
+        sync: false
