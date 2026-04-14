@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import SafeImage from '../components/SafeImage';
 import { HAS_BACKEND, apiUrl } from '../lib/api';
+import SeoHelmet from '../components/SeoHelmet';
 
 const formatEventDate = (value) => {
   const date = new Date(value);
@@ -114,6 +115,13 @@ const SingleEvent = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title={event.title}
+        description={paragraphs[0] || event.description}
+        canonicalPath={`/eventos/${event.slug}`}
+        image={eventImages[0]}
+        type="article"
+      />
       <div className="border-b border-gray-200 py-16">
         <div className="max-w-6xl mx-auto px-6 lg:px-8">
           <Link

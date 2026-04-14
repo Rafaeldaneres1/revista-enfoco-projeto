@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { HAS_BACKEND, apiUrl } from '../lib/api';
 import { siteContent } from '../data/siteContent';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const splitDescription = (value) => {
   if (!value) {
@@ -58,6 +59,12 @@ const EventsPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title="Eventos"
+        description="Agenda de eventos e experiências ligadas à Revista Enfoco."
+        canonicalPath="/eventos"
+        image={events[0]?.event_images?.[0]}
+      />
       <div className="border-b border-gray-200 py-20">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <p className="text-xs font-sans tracking-[0.2em] uppercase text-stone mb-4">Agenda Cultural</p>

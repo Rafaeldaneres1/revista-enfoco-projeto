@@ -59,14 +59,8 @@ const normalizeContent = (value) => {
   return value;
 };
 
-const authHeaders = (token) => ({
-  Authorization: `Bearer ${token}`
-});
-
-const upsertCollection = async ({ path, items, getKey, buildPayload, token }) => {
-  const response = await axios.get(apiUrl(path), {
-    headers: authHeaders(token)
-  });
+const upsertCollection = async ({ path, items, getKey, buildPayload }) => {
+  const response = await axios.get(apiUrl(path));
 
   const existingItems = response.data || [];
   const existingMap = new Map(existingItems.map((item) => [getKey(item), item]));
@@ -82,13 +76,10 @@ const upsertCollection = async ({ path, items, getKey, buildPayload, token }) =>
 
     if (existing) {
       await axios.put(apiUrl(`${path}/${existing.id}`), payload, {
-        headers: authHeaders(token)
       });
       updated += 1;
     } else {
-      await axios.post(apiUrl(path), payload, {
-        headers: authHeaders(token)
-      });
+      await axios.post(apiUrl(path), payload);
       created += 1;
     }
   }
@@ -96,12 +87,11 @@ const upsertCollection = async ({ path, items, getKey, buildPayload, token }) =>
   return { created, updated };
 };
 
-export const importInitialContent = async (token) => {
+export const importInitialContent = async () => {
   const posts = await upsertCollection({
     path: '/api/posts',
     items: fallbackPosts,
     getKey: (item) => item.slug,
-    token,
     buildPayload: (post) => ({
       title: post.title,
       content: post.content,
@@ -118,7 +108,6 @@ export const importInitialContent = async (token) => {
     path: '/api/columns',
     items: fallbackColumns,
     getKey: (item) => item.slug,
-    token,
     buildPayload: (column) => ({
       title: column.title,
       content: column.content,
@@ -137,7 +126,6 @@ export const importInitialContent = async (token) => {
     path: '/api/editions',
     items: fallbackEditions,
     getKey: (item) => item.slug,
-    token,
     buildPayload: (edition) => ({
       title: edition.title,
       description: edition.description,
@@ -155,7 +143,6 @@ export const importInitialContent = async (token) => {
     path: '/api/team',
     items: siteContent.team || [],
     getKey: (item) => item.name,
-    token,
     buildPayload: (member) => ({
       name: member.name,
       role: member.role,
@@ -195,9 +182,6 @@ export const importInitialContent = async (token) => {
       archive_empty_message:
         siteContent.home.archiveEmptyMessage ||
         'As edições da revista serão exibidas aqui assim que forem cadastradas no backend.'
-    },
-    {
-      headers: authHeaders(token)
     }
   );
 
@@ -224,9 +208,6 @@ export const importInitialContent = async (token) => {
       contact_phone: siteContent.contact.phone || '',
       contact_city: siteContent.contact.city || siteContent.location || 'Santa Maria - RS',
       social: siteContent.contact.social || {}
-    },
-    {
-      headers: authHeaders(token)
     }
   );
 

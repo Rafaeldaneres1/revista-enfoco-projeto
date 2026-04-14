@@ -15,7 +15,7 @@ const AdminPostForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   const [formData, setFormData] = useState({
     title: '',
@@ -61,10 +61,10 @@ const AdminPostForm = () => {
       try {
         const [categoriesResponse, postsResponse] = await Promise.all([
           axios.get(apiUrl('/api/categories'), {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: {  }
           }),
           axios.get(apiUrl('/api/posts'), {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: {  }
           })
         ]);
 
@@ -169,11 +169,11 @@ const AdminPostForm = () => {
     try {
       if (isEdit) {
         await axios.put(apiUrl(`/api/posts/${id}`), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       } else {
         await axios.post(apiUrl('/api/posts'), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       }
       navigate('/admin/posts');
@@ -471,3 +471,5 @@ const AdminPostForm = () => {
 };
 
 export default AdminPostForm;
+
+

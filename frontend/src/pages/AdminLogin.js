@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+import { useAuth } from '../context/AuthContext';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -13,18 +12,22 @@ const AdminLogin = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/admin/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const response = await axios.post(`${BACKEND_URL}/api/auth/login`, formData);
-      localStorage.setItem('token', response.data.access_token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      await login(formData);
       navigate('/admin/dashboard');
     } catch (error) {
-      setError('E-mail ou senha incorretos');
+      setError(error?.response?.data?.detail || 'E-mail ou senha incorretos');
     } finally {
       setLoading(false);
     }

@@ -86,7 +86,7 @@ const AdminImageField = ({
     try {
       const response = await axios.post(apiUrl('/api/media/upload'), payload, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          
           'Content-Type': 'multipart/form-data'
         }
       });
@@ -209,3 +209,4 @@ const AdminImageField = ({
 };
 
 export default AdminImageField;
+

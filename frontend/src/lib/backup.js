@@ -22,7 +22,7 @@ export const exportAllData = async (token) => {
     for (const endpoint of endpoints) {
       try {
         const response = await fetch(endpoint, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         
         if (response.ok) {
@@ -212,7 +212,7 @@ export const cleanOldBackups = (daysToKeep = 30) => {
 export const exportToCSV = async (token, dataType = 'posts') => {
   try {
     const response = await fetch(`/api/${dataType}`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: {  }
     });
 
     if (!response.ok) {
@@ -277,3 +277,4 @@ export default {
   cleanOldBackups,
   exportToCSV
 };
+

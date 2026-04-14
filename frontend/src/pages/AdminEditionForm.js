@@ -12,7 +12,7 @@ const AdminEditionForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const pdfInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
@@ -48,7 +48,7 @@ const AdminEditionForm = () => {
     const fetchEdition = async () => {
       try {
         const response = await axios.get(apiUrl('/api/editions'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         const edition = response.data.find((item) => item.id === id);
         if (edition) {
@@ -106,7 +106,7 @@ const AdminEditionForm = () => {
 
       const response = await axios.post(apiUrl('/api/media/upload-pdf'), payload, {
         headers: {
-          Authorization: `Bearer ${token}`
+          
         },
         timeout: PDF_UPLOAD_TIMEOUT_MS,
         onUploadProgress: (progressEvent) => {
@@ -174,11 +174,11 @@ const AdminEditionForm = () => {
     try {
       if (isEdit) {
         await axios.put(apiUrl(`/api/editions/${id}`), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       } else {
         await axios.post(apiUrl('/api/editions'), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       }
       navigate('/admin/editions');
@@ -463,3 +463,5 @@ const AdminEditionForm = () => {
 };
 
 export default AdminEditionForm;
+
+

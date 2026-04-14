@@ -4,6 +4,7 @@ import { HAS_BACKEND, apiUrl } from '../lib/api';
 import { normalizeEditorialText } from '../lib/text';
 import { siteContent } from '../data/siteContent';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const buildFallbackAboutSettings = () => ({
   location: siteContent.location,
@@ -94,6 +95,12 @@ const About = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title="Quem Somos"
+        description={normalizeEditorialText(aboutSettings.intro)}
+        canonicalPath="/quem-somos"
+        image={aboutSettings.cover_image || leadMember?.image}
+      />
       <div className="relative overflow-hidden text-white">
         {aboutSettings.cover_image ? (
           <>

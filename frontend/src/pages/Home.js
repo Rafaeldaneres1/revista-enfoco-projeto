@@ -8,6 +8,7 @@ import CategoryLabel from '../components/CategoryLabel';
 import SafeImage from '../components/SafeImage';
 import ScrollReveal from '../components/ScrollReveal';
 import Parallax from '../components/Parallax';
+import SeoHelmet from '../components/SeoHelmet';
 
 const buildFallbackHomeSettings = () => ({
   hero_display_mode: 'fixed',
@@ -337,6 +338,12 @@ const Home = () => {
 
   return (
     <div className="min-h-screen">
+      <SeoHelmet
+        title="Início"
+        description="Revista Enfoco com notícias, colunas, eventos e edições especiais em Santa Maria e região."
+        canonicalPath="/"
+        image={activeHeroPost?.featured_image || latestEdition?.cover_image || visibleHomeColumns[0]?.featured_image}
+      />
       {activeHeroPost ? (
         <section className="relative min-h-screen flex flex-col overflow-hidden bg-charcoal">
           {/* Hero Principal - Capa de Revista Premium */}

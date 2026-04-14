@@ -7,7 +7,7 @@ const AdminEditions = () => {
   const navigate = useNavigate();
   const [editions, setEditions] = useState([]);
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   useEffect(() => {
     if (!token) {
@@ -36,7 +36,7 @@ const AdminEditions = () => {
 
     try {
       await axios.delete(apiUrl(`/api/editions/${editionId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setEditions((current) => current.filter((item) => item.id !== editionId));
     } catch (error) {
@@ -136,3 +136,5 @@ const AdminEditions = () => {
 };
 
 export default AdminEditions;
+
+

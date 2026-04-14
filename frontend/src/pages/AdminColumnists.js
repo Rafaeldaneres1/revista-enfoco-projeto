@@ -6,7 +6,7 @@ import SafeImage from '../components/SafeImage';
 
 const AdminColumnists = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const [columnists, setColumnists] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +19,7 @@ const AdminColumnists = () => {
     const fetchColumnists = async () => {
       try {
         const response = await axios.get(apiUrl('/api/columnists'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         setColumnists(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
@@ -39,7 +39,7 @@ const AdminColumnists = () => {
 
     try {
       await axios.delete(apiUrl(`/api/columnists/${columnistId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setColumnists((current) => current.filter((columnist) => columnist.id !== columnistId));
     } catch (error) {
@@ -144,3 +144,5 @@ const AdminColumnists = () => {
 };
 
 export default AdminColumnists;
+
+

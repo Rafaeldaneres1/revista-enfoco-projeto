@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { HAS_BACKEND, apiUrl, resolveAssetUrl } from '../lib/api';
 import { fallbackEditions } from '../data/initialContent';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const sanitizeText = (value = '') =>
   value
@@ -208,6 +209,12 @@ const EditionReaderPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title={sanitizeText(edition.title)}
+        description={sanitizeText(edition.description || 'Leitura da edição da Revista Enfoco.')}
+        canonicalPath={`/revista/${edition.slug}`}
+        image={edition.cover_image || pageImages[0]}
+      />
       <div className="border-b border-gray-200 py-20 bg-porcelain">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <Link

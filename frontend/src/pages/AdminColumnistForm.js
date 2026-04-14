@@ -8,7 +8,7 @@ const AdminColumnistForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -34,7 +34,7 @@ const AdminColumnistForm = () => {
     const fetchColumnist = async () => {
       try {
         const response = await axios.get(apiUrl(`/api/columnists/${id}`), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         const columnist = response.data;
         setFormData({
@@ -62,11 +62,11 @@ const AdminColumnistForm = () => {
     try {
       if (isEdit) {
         await axios.put(apiUrl(`/api/columnists/${id}`), formData, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       } else {
         await axios.post(apiUrl('/api/columnists'), formData, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       }
       navigate('/admin/columns/columnists');
@@ -169,3 +169,5 @@ const AdminColumnistForm = () => {
 };
 
 export default AdminColumnistForm;
+
+

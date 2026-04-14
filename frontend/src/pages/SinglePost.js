@@ -9,6 +9,7 @@ import SafeImage from '../components/SafeImage';
 import ScrollReveal from '../components/ScrollReveal';
 import ReadingProgress from '../components/ReadingProgress';
 import RichTextContent from '../components/RichTextContent';
+import SeoHelmet from '../components/SeoHelmet';
 
 const SinglePost = () => {
   const { slug } = useParams();
@@ -79,6 +80,13 @@ const SinglePost = () => {
 
   return (
     <article className="min-h-screen bg-white">
+      <SeoHelmet
+        title={post.title}
+        description={post.excerpt}
+        canonicalPath={`/noticias/${post.slug}`}
+        image={post.featured_image}
+        type="article"
+      />
       <ReadingProgress />
 
       {post.featured_image && (

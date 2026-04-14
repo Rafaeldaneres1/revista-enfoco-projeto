@@ -4,6 +4,8 @@ import './App.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
+import PrivateRoute from './components/PrivateRoute';
+import { AuthProvider } from './context/AuthContext';
 
 import Home from './pages/Home';
 import About from './pages/About';
@@ -48,54 +50,56 @@ function LegacyColumnRedirect() {
 function App() {
   return (
     <Router>
-      <ScrollToTop />
-      <div className="App min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/quem-somos" element={<About />} />
-            <Route path="/noticias" element={<PostsPage />} />
-            <Route path="/noticias/:slug" element={<SinglePost />} />
-            <Route path="/materia/:slug" element={<LegacyPostRedirect />} />
-            <Route path="/colunas" element={<ColumnsPage />} />
-            <Route path="/colunas/:slug" element={<SingleColumn />} />
-            <Route path="/coluna/:slug" element={<LegacyColumnRedirect />} />
-            <Route path="/eventos" element={<EventsPage />} />
-            <Route path="/eventos/:slug" element={<SingleEvent />} />
-            <Route path="/edicoes" element={<EditionsPage />} />
-            <Route path="/revista" element={<EditionsPage />} />
-            <Route path="/revista/:slug" element={<EditionReaderPage />} />
+      <AuthProvider>
+        <ScrollToTop />
+        <div className="App min-h-screen flex flex-col">
+          <Header />
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/quem-somos" element={<About />} />
+              <Route path="/noticias" element={<PostsPage />} />
+              <Route path="/noticias/:slug" element={<SinglePost />} />
+              <Route path="/materia/:slug" element={<LegacyPostRedirect />} />
+              <Route path="/colunas" element={<ColumnsPage />} />
+              <Route path="/colunas/:slug" element={<SingleColumn />} />
+              <Route path="/coluna/:slug" element={<LegacyColumnRedirect />} />
+              <Route path="/eventos" element={<EventsPage />} />
+              <Route path="/eventos/:slug" element={<SingleEvent />} />
+              <Route path="/edicoes" element={<EditionsPage />} />
+              <Route path="/revista" element={<EditionsPage />} />
+              <Route path="/revista/:slug" element={<EditionReaderPage />} />
 
-            <Route path="/admin" element={<AdminLogin />} />
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/admin/posts" element={<AdminPosts />} />
-            <Route path="/admin/posts/new" element={<AdminPostForm />} />
-            <Route path="/admin/posts/edit/:id" element={<AdminPostForm />} />
-            <Route path="/admin/columns" element={<AdminColumns />} />
-            <Route path="/admin/columns/new" element={<AdminColumnForm />} />
-            <Route path="/admin/columns/edit/:id" element={<AdminColumnForm />} />
-            <Route path="/admin/columns/columnists" element={<AdminColumnists />} />
-            <Route path="/admin/columns/columnists/new" element={<AdminColumnistForm />} />
-            <Route path="/admin/columns/columnists/edit/:id" element={<AdminColumnistForm />} />
-            <Route path="/admin/events" element={<AdminEvents />} />
-            <Route path="/admin/events/new" element={<AdminEventForm />} />
-            <Route path="/admin/events/edit/:id" element={<AdminEventForm />} />
-            <Route path="/admin/editions" element={<AdminEditions />} />
-            <Route path="/admin/editions/new" element={<AdminEditionForm />} />
-            <Route path="/admin/editions/edit/:id" element={<AdminEditionForm />} />
-            <Route path="/admin/home" element={<AdminHomeForm />} />
-            <Route path="/admin/about" element={<AdminAboutForm />} />
-            <Route path="/admin/team" element={<AdminTeams />} />
-            <Route path="/admin/team/new" element={<AdminTeamForm />} />
-            <Route path="/admin/team/edit/:id" element={<AdminTeamForm />} />
-            <Route path="/admin/categories" element={<AdminCategories />} />
-            <Route path="/admin/categories/new" element={<AdminCategoryForm />} />
-            <Route path="/admin/categories/edit/:id" element={<AdminCategoryForm />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+              <Route path="/admin" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
+              <Route path="/admin/posts" element={<PrivateRoute><AdminPosts /></PrivateRoute>} />
+              <Route path="/admin/posts/new" element={<PrivateRoute><AdminPostForm /></PrivateRoute>} />
+              <Route path="/admin/posts/edit/:id" element={<PrivateRoute><AdminPostForm /></PrivateRoute>} />
+              <Route path="/admin/columns" element={<PrivateRoute><AdminColumns /></PrivateRoute>} />
+              <Route path="/admin/columns/new" element={<PrivateRoute><AdminColumnForm /></PrivateRoute>} />
+              <Route path="/admin/columns/edit/:id" element={<PrivateRoute><AdminColumnForm /></PrivateRoute>} />
+              <Route path="/admin/columns/columnists" element={<PrivateRoute><AdminColumnists /></PrivateRoute>} />
+              <Route path="/admin/columns/columnists/new" element={<PrivateRoute><AdminColumnistForm /></PrivateRoute>} />
+              <Route path="/admin/columns/columnists/edit/:id" element={<PrivateRoute><AdminColumnistForm /></PrivateRoute>} />
+              <Route path="/admin/events" element={<PrivateRoute><AdminEvents /></PrivateRoute>} />
+              <Route path="/admin/events/new" element={<PrivateRoute><AdminEventForm /></PrivateRoute>} />
+              <Route path="/admin/events/edit/:id" element={<PrivateRoute><AdminEventForm /></PrivateRoute>} />
+              <Route path="/admin/editions" element={<PrivateRoute><AdminEditions /></PrivateRoute>} />
+              <Route path="/admin/editions/new" element={<PrivateRoute><AdminEditionForm /></PrivateRoute>} />
+              <Route path="/admin/editions/edit/:id" element={<PrivateRoute><AdminEditionForm /></PrivateRoute>} />
+              <Route path="/admin/home" element={<PrivateRoute><AdminHomeForm /></PrivateRoute>} />
+              <Route path="/admin/about" element={<PrivateRoute><AdminAboutForm /></PrivateRoute>} />
+              <Route path="/admin/team" element={<PrivateRoute><AdminTeams /></PrivateRoute>} />
+              <Route path="/admin/team/new" element={<PrivateRoute><AdminTeamForm /></PrivateRoute>} />
+              <Route path="/admin/team/edit/:id" element={<PrivateRoute><AdminTeamForm /></PrivateRoute>} />
+              <Route path="/admin/categories" element={<PrivateRoute><AdminCategories /></PrivateRoute>} />
+              <Route path="/admin/categories/new" element={<PrivateRoute><AdminCategoryForm /></PrivateRoute>} />
+              <Route path="/admin/categories/edit/:id" element={<PrivateRoute><AdminCategoryForm /></PrivateRoute>} />
+            </Routes>
+          </main>
+          <Footer />
+        </div>
+      </AuthProvider>
     </Router>
   );
 }

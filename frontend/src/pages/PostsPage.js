@@ -6,6 +6,7 @@ import { normalizeEditorialText } from '../lib/text';
 import { fallbackPosts } from '../data/initialContent';
 import CategoryLabel, { getCategoryMeta, useCategoryCatalog } from '../components/CategoryLabel';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const PostsPage = () => {
   const [loading, setLoading] = useState(true);
@@ -77,6 +78,12 @@ const PostsPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title="Notícias"
+        description="Acompanhe as notícias e artigos publicados pela Revista Enfoco."
+        canonicalPath="/noticias"
+        image={filteredPosts[0]?.featured_image || posts[0]?.featured_image}
+      />
       <div className="border-b border-gray-200 py-24 sm:py-28 lg:py-32 bg-porcelain animate-slide-down">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <p className="label-premium mb-6">Leitura Recomendada</p>

@@ -9,7 +9,7 @@ const AdminColumns = () => {
   const navigate = useNavigate();
   const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   useEffect(() => {
     if (!token) {
@@ -38,7 +38,7 @@ const AdminColumns = () => {
 
     try {
       await axios.delete(apiUrl(`/api/columns/${columnId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setColumns((current) => current.filter((column) => column.id !== columnId));
     } catch (error) {
@@ -134,3 +134,5 @@ const AdminColumns = () => {
 };
 
 export default AdminColumns;
+
+

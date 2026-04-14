@@ -5,6 +5,7 @@ import { HAS_BACKEND, apiUrl, resolveAssetUrl } from '../lib/api';
 import { siteContent } from '../data/siteContent';
 import { fallbackEditions } from '../data/initialContent';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const sanitizeText = (value = '') =>
   value
@@ -67,6 +68,12 @@ const EditionsPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title="Revista"
+        description="Explore as edições publicadas da Revista Enfoco e acesse o acervo digital."
+        canonicalPath="/revista"
+        image={latestEdition?.cover_image || editions[0]?.cover_image}
+      />
       <div className="border-b border-gray-200 py-24 bg-porcelain animate-slide-down">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <p className="label-premium mb-6">Acervo Digital</p>

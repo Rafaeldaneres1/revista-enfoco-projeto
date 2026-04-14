@@ -39,7 +39,7 @@ const buildFallbackForm = () => ({
 
 const AdminAboutForm = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const [formData, setFormData] = useState(buildFallbackForm);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -54,7 +54,7 @@ const AdminAboutForm = () => {
     const fetchAbout = async () => {
       try {
         const response = await axios.get(apiUrl('/api/about'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
 
         const about = response.data;
@@ -142,7 +142,7 @@ const AdminAboutForm = () => {
 
     try {
       await axios.put(apiUrl('/api/about'), payload, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       navigate('/admin/dashboard');
     } catch (saveError) {
@@ -425,3 +425,5 @@ const AdminAboutForm = () => {
 };
 
 export default AdminAboutForm;
+
+

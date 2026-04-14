@@ -6,7 +6,7 @@ import { resetCategoryCatalogCache } from '../components/CategoryLabel';
 
 const AdminCategories = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +19,7 @@ const AdminCategories = () => {
     const fetchCategories = async () => {
       try {
         const response = await axios.get(apiUrl('/api/categories'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         setCategories(response.data);
       } catch (error) {
@@ -39,7 +39,7 @@ const AdminCategories = () => {
 
     try {
       await axios.delete(apiUrl(`/api/categories/${categoryId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       resetCategoryCatalogCache();
       setCategories((current) => current.filter((category) => category.id !== categoryId));
@@ -147,3 +147,5 @@ const AdminCategories = () => {
 };
 
 export default AdminCategories;
+
+

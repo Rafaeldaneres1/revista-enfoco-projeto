@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, status, File, UploadFile, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +38,7 @@ MAX_IMAGE_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 LOGIN_RATE_LIMIT_ATTEMPTS = 5
 LOGIN_RATE_LIMIT_WINDOW = timedelta(minutes=15)
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp", ".tiff"}
+AUTH_COOKIE_NAME = "revista_enfoco_token"
 
 
 def parse_cors_origins(raw_origins: Optional[str]) -> List[str]:
@@ -49,6 +50,12 @@ def parse_cors_origins(raw_origins: Optional[str]) -> List[str]:
     if "*" in origins:
         raise RuntimeError("CORS_ORIGINS cannot contain wildcard '*' in production configuration")
     return origins
+
+
+ALLOWED_CORS_ORIGINS = parse_cors_origins(os.environ.get('CORS_ORIGINS'))
+COOKIE_IS_SECURE = any(origin.startswith("https://") for origin in ALLOWED_CORS_ORIGINS)
+COOKIE_SAMESITE = "none" if COOKIE_IS_SECURE else "lax"
+AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days in seconds
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -66,7 +73,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 # Security
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 login_attempts: Dict[str, deque] = defaultdict(deque)
 
 # Create the main app
@@ -430,8 +437,36 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
+def set_auth_cookie(response: Response, access_token: str) -> None:
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=COOKIE_IS_SECURE,
+        samesite=COOKIE_SAMESITE,
+        max_age=AUTH_COOKIE_MAX_AGE,
+        expires=AUTH_COOKIE_MAX_AGE,
+        path="/"
+    )
+
+
+def clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=AUTH_COOKIE_NAME,
+        httponly=True,
+        secure=COOKIE_IS_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path="/"
+    )
+
+
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+):
+    token = credentials.credentials if credentials else request.cookies.get(AUTH_COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -656,7 +691,7 @@ async def register(user_data: UserCreate, current_user: User = Depends(get_curre
     return user_obj
 
 @api_router.post("/auth/login", response_model=Token)
-async def login(user_data: UserLogin, request: Request):
+async def login(user_data: UserLogin, request: Request, response: Response):
     client_key = get_request_client_key(request, user_data.email)
     enforce_login_rate_limit(client_key)
     user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
@@ -668,6 +703,7 @@ async def login(user_data: UserLogin, request: Request):
     
     clear_login_rate_limit(client_key)
     access_token = create_access_token(data={"sub": user['id']})
+    set_auth_cookie(response, access_token)
     
     if isinstance(user.get('created_at'), str):
         user['created_at'] = datetime.fromisoformat(user['created_at'])
@@ -675,6 +711,11 @@ async def login(user_data: UserLogin, request: Request):
     user_obj = User(**{k: v for k, v in user.items() if k != 'hashed_password'})
     
     return Token(access_token=access_token, token_type="bearer", user=user_obj)
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"message": "Logged out successfully"}
 
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
@@ -1578,7 +1619,7 @@ async def health_check():
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=parse_cors_origins(os.environ.get('CORS_ORIGINS')),
+    allow_origins=ALLOWED_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

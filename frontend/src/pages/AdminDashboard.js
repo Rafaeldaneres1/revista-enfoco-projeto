@@ -4,6 +4,7 @@ import axios from 'axios';
 import { apiUrl } from '../lib/api';
 import { importInitialContent } from '../lib/contentImport';
 import AdminAdvancedDashboard from '../components/AdminAdvancedDashboard';
+import { useAuth } from '../context/AuthContext';
 
 const buildRecentActivity = ({ posts, columns, events, editions }) => {
   const allItems = [
@@ -48,8 +49,7 @@ const buildRecentActivity = ({ posts, columns, events, editions }) => {
 };
 
 const AdminDashboard = () => {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const token = localStorage.getItem('token');
+  const { user, logout } = useAuth();
   const [importing, setImporting] = React.useState(false);
   const [importMessage, setImportMessage] = React.useState('');
   const [showNotification, setShowNotification] = React.useState(false);
@@ -64,11 +64,6 @@ const AdminDashboard = () => {
   });
 
   React.useEffect(() => {
-    if (!token) {
-      window.location.href = '/admin';
-      return;
-    }
-
     const loadStats = async () => {
       try {
         const [postsResponse, columnsResponse, eventsResponse, editionsResponse] =
@@ -99,26 +94,20 @@ const AdminDashboard = () => {
     };
 
     loadStats();
-  }, [token]);
+  }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  const handleLogout = async () => {
+    await logout();
     window.location.href = '/admin';
   };
 
   const handleImport = async () => {
-    if (!token) {
-      setImportMessage('Faça login novamente para sincronizar o conteúdo editorial.');
-      setShowNotification(true);
-      return;
-    }
 
     setImporting(true);
     setImportMessage('');
 
     try {
-      const result = await importInitialContent(token);
+      const result = await importInitialContent();
       setImportMessage(
         `✓ Conteúdo sincronizado: ${result.posts.created + result.posts.updated} notícias, ${result.columns.created + result.columns.updated} colunas, ${result.editions.created + result.editions.updated} edições, ${result.team.created + result.team.updated} perfis da equipe.`
       );
@@ -380,3 +369,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

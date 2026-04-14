@@ -19,7 +19,7 @@ const AdminEventForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   const [formData, setFormData] = useState({
     title: '',
@@ -45,7 +45,7 @@ const AdminEventForm = () => {
     const fetchEvent = async () => {
       try {
         const response = await axios.get(apiUrl('/api/events'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         const event = response.data.find((item) => item.id === id);
         if (event) {
@@ -79,11 +79,11 @@ const AdminEventForm = () => {
     try {
       if (isEdit) {
         await axios.put(apiUrl(`/api/events/${id}`), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       } else {
         await axios.post(apiUrl('/api/events'), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       }
       navigate('/admin/events');
@@ -196,3 +196,5 @@ const AdminEventForm = () => {
 };
 
 export default AdminEventForm;
+
+

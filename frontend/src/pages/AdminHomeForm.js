@@ -63,7 +63,7 @@ const normalizeHomeColumns = (items = []) =>
 
 const AdminHomeForm = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const [formData, setFormData] = useState(buildFallbackForm);
   const [posts, setPosts] = useState([]);
   const [editions, setEditions] = useState([]);
@@ -82,7 +82,7 @@ const AdminHomeForm = () => {
       try {
         const [settingsResponse, postsResponse, editionsResponse, columnsResponse] = await Promise.allSettled([
           axios.get(apiUrl('/api/home-settings'), {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: {  }
           }),
           axios.get(apiUrl('/api/posts?published=true')),
           axios.get(apiUrl('/api/editions?published=true')),
@@ -281,7 +281,7 @@ const AdminHomeForm = () => {
 
     try {
       await axios.put(apiUrl('/api/home-settings'), payload, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       navigate('/admin/dashboard');
     } catch (saveError) {
@@ -881,3 +881,5 @@ const AdminHomeForm = () => {
 };
 
 export default AdminHomeForm;
+
+

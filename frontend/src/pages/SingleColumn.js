@@ -6,6 +6,7 @@ import { fallbackColumns } from '../data/initialContent';
 import SafeImage from '../components/SafeImage';
 import RichTextContent from '../components/RichTextContent';
 import { normalizeRichTextForRender } from '../lib/richText';
+import SeoHelmet from '../components/SeoHelmet';
 
 const normalizeText = (value = '') =>
   String(value)
@@ -78,6 +79,13 @@ const SingleColumn = () => {
 
   return (
     <article className="min-h-screen bg-white">
+      <SeoHelmet
+        title={normalizeText(column.title)}
+        description={normalizeText(column.excerpt || column.author_bio || '')}
+        canonicalPath={`/colunas/${column.slug}`}
+        image={column.featured_image || column.author_image}
+        type="article"
+      />
       {column.featured_image && (
         <div className="relative h-[60vh] bg-gray-100">
           <SafeImage

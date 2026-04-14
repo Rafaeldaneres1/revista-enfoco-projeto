@@ -16,7 +16,7 @@ const AdminPosts = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [notification, setNotification] = useState(null);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   useEffect(() => {
     if (!token) {
@@ -42,7 +42,7 @@ const AdminPosts = () => {
   const handleDelete = async (postId) => {
     try {
       await axios.delete(apiUrl(`/api/posts/${postId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setNotification({ type: 'success', message: 'Notícia deletada com sucesso.' });
       setDeleteConfirm(null);
@@ -289,3 +289,5 @@ const AdminPosts = () => {
 };
 
 export default AdminPosts;
+
+

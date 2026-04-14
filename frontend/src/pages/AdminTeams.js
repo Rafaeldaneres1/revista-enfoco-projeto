@@ -6,7 +6,7 @@ import SafeImage from '../components/SafeImage';
 
 const AdminTeams = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +19,7 @@ const AdminTeams = () => {
     const fetchTeam = async () => {
       try {
         const response = await axios.get(apiUrl('/api/team'), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         setTeamMembers(response.data);
       } catch (error) {
@@ -39,7 +39,7 @@ const AdminTeams = () => {
 
     try {
       await axios.delete(apiUrl(`/api/team/${teamMemberId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setTeamMembers((current) => current.filter((member) => member.id !== teamMemberId));
     } catch (error) {
@@ -145,3 +145,5 @@ const AdminTeams = () => {
 };
 
 export default AdminTeams;
+
+

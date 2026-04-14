@@ -4,6 +4,8 @@ const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || '').replace(/\/$/, '')
 const HAS_BACKEND = Boolean(BACKEND_URL);
 const IS_NGROK_BACKEND = /ngrok-(free\.app|free\.dev)|ngrok\.io/i.test(BACKEND_URL);
 
+axios.defaults.withCredentials = true;
+
 if (IS_NGROK_BACKEND) {
   axios.defaults.headers.common['ngrok-skip-browser-warning'] = 'true';
   axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';

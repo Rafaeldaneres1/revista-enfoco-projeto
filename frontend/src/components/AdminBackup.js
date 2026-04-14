@@ -6,7 +6,7 @@ const AdminBackup = () => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [lastBackup, setLastBackup] = useState(null);
   const [notification, setNotification] = useState(null);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   useEffect(() => {
     loadBackupHistory();
@@ -228,3 +228,4 @@ const AdminBackup = () => {
 };
 
 export default AdminBackup;
+

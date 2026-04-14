@@ -9,7 +9,7 @@ const AdminEvents = () => {
   const navigate = useNavigate();
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   useEffect(() => {
     if (!token) {
@@ -38,7 +38,7 @@ const AdminEvents = () => {
 
     try {
       await axios.delete(apiUrl(`/api/events/${eventId}`), {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: {  }
       });
       setEvents((current) => current.filter((item) => item.id !== eventId));
     } catch (error) {
@@ -140,3 +140,5 @@ const AdminEvents = () => {
 };
 
 export default AdminEvents;
+
+

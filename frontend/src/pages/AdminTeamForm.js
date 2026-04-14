@@ -8,7 +8,7 @@ const AdminTeamForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
-  const token = localStorage.getItem('token');
+  const token = 'cookie-session';
 
   const [formData, setFormData] = useState({
     name: '',
@@ -36,7 +36,7 @@ const AdminTeamForm = () => {
     const fetchTeamMember = async () => {
       try {
         const response = await axios.get(apiUrl(`/api/team/${id}`), {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
         const member = response.data;
         setFormData({
@@ -71,11 +71,11 @@ const AdminTeamForm = () => {
     try {
       if (isEdit) {
         await axios.put(apiUrl(`/api/team/${id}`), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       } else {
         await axios.post(apiUrl('/api/team'), payload, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: {  }
         });
       }
       navigate('/admin/team');
@@ -204,3 +204,5 @@ const AdminTeamForm = () => {
 };
 
 export default AdminTeamForm;
+
+

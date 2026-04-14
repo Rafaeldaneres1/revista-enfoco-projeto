@@ -181,7 +181,7 @@ const AdminImageGalleryField = ({
 
         const response = await axios.post(apiUrl('/api/media/upload'), payload, {
           headers: {
-            Authorization: `Bearer ${token}`
+            
           },
           timeout: IMAGE_UPLOAD_TIMEOUT_MS
         });
@@ -407,3 +407,4 @@ const AdminImageGalleryField = ({
 };
 
 export default AdminImageGalleryField;
+

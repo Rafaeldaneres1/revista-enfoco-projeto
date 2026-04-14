@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { HAS_BACKEND, apiUrl } from '../lib/api';
 import { fallbackColumns } from '../data/initialContent';
 import SafeImage from '../components/SafeImage';
+import SeoHelmet from '../components/SeoHelmet';
 
 const normalizeText = (value = '') =>
   String(value)
@@ -59,6 +60,12 @@ const ColumnsPage = () => {
 
   return (
     <div className="min-h-screen bg-white">
+      <SeoHelmet
+        title="Colunas"
+        description="Leituras autorais, colunas de opinião e análises publicadas pela Revista Enfoco."
+        canonicalPath="/colunas"
+        image={columns[0]?.featured_image || columns[0]?.author_image}
+      />
       <div className="border-b border-gray-200 py-20 bg-porcelain">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <p className="text-xs font-sans tracking-[0.25em] uppercase text-stone mb-4 font-semibold">
