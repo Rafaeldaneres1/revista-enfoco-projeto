@@ -22,6 +22,7 @@ from io import BytesIO
 from collections import defaultdict, deque
 from xml.etree import ElementTree
 from PIL import Image, UnidentifiedImageError
+from vercel.blob import AsyncBlobClient
 
 try:
     import fitz  # PyMuPDF
@@ -33,6 +34,8 @@ load_dotenv(ROOT_DIR / '.env')
 uploads_dir_env = os.environ.get("UPLOADS_DIR")
 UPLOADS_DIR = Path(uploads_dir_env).expanduser() if uploads_dir_env else ROOT_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+BLOB_READ_WRITE_TOKEN = os.environ.get("BLOB_READ_WRITE_TOKEN")
+USE_VERCEL_BLOB = bool(BLOB_READ_WRITE_TOKEN)
 
 MAX_IMAGE_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 LOGIN_RATE_LIMIT_ATTEMPTS = 5
@@ -489,27 +492,76 @@ async def get_current_user(
 def create_slug(title: str) -> str:
     return slugify(title)
 
+def is_blob_url(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    return ".blob.vercel-storage.com/" in str(value)
+
 def build_upload_public_url(filename: str) -> str:
-    return f"/uploads/{filename}"
+    return filename if is_blob_url(filename) else f"/uploads/{filename}"
 
 def build_upload_storage_path(relative_path: str) -> Path:
     normalized = Path(relative_path)
     return UPLOADS_DIR / normalized
 
-def generate_pdf_page_images(pdf_path: Path, source_stem: str) -> dict:
+def normalize_blob_path(pathname: str) -> str:
+    return str(pathname).replace("\\", "/").lstrip("/")
+
+async def upload_bytes_to_blob(
+    pathname: str,
+    file_bytes: bytes,
+    *,
+    content_type: Optional[str] = None,
+    multipart: Optional[bool] = None
+) -> str:
+    if not USE_VERCEL_BLOB:
+        raise RuntimeError("BLOB_READ_WRITE_TOKEN environment variable is required for blob uploads")
+
+    client = AsyncBlobClient()
+    blob = await client.put(
+        normalize_blob_path(pathname),
+        file_bytes,
+        access="public",
+        content_type=content_type,
+        overwrite=True,
+        multipart=multipart,
+        token=BLOB_READ_WRITE_TOKEN,
+    )
+    return blob.url
+
+async def persist_upload(
+    pathname: str,
+    file_bytes: bytes,
+    *,
+    content_type: Optional[str] = None,
+    multipart: Optional[bool] = None
+) -> str:
+    normalized_path = normalize_blob_path(pathname)
+    if USE_VERCEL_BLOB:
+        return await upload_bytes_to_blob(
+            normalized_path,
+            file_bytes,
+            content_type=content_type,
+            multipart=multipart,
+        )
+
+    file_path = build_upload_storage_path(normalized_path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with file_path.open("wb") as buffer:
+        buffer.write(file_bytes)
+    return build_upload_public_url(normalized_path)
+
+async def generate_pdf_page_images(pdf_bytes: bytes, source_stem: str) -> dict:
     if fitz is None:
         return {"generated_pages": [], "generated_preview_pages": []}
 
     try:
-        document = fitz.open(pdf_path)
+        document = fitz.open(stream=pdf_bytes, filetype="pdf")
     except Exception as error:
         logging.exception("Failed to open uploaded PDF for page generation: %s", error)
         return {"generated_pages": [], "generated_preview_pages": []}
 
     relative_dir = Path("editions") / source_stem
-    output_dir = build_upload_storage_path(relative_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     generated_pages = []
 
     try:
@@ -517,9 +569,14 @@ def generate_pdf_page_images(pdf_path: Path, source_stem: str) -> dict:
             page = document.load_page(index)
             pix = page.get_pixmap(matrix=fitz.Matrix(1.8, 1.8), alpha=False)
             relative_file = relative_dir / f"page-{index + 1}.png"
-            output_path = build_upload_storage_path(relative_file)
-            pix.save(output_path)
-            generated_pages.append(build_upload_public_url(relative_file.as_posix()))
+            image_bytes = pix.tobytes("png")
+            generated_pages.append(
+                await persist_upload(
+                    relative_file.as_posix(),
+                    image_bytes,
+                    content_type="image/png",
+                )
+            )
     except Exception as error:
         logging.exception("Failed to generate images from uploaded PDF: %s", error)
         generated_pages = []
@@ -1320,14 +1377,15 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
     validate_and_prepare_image_upload(file, file_bytes, file_extension)
 
     unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = UPLOADS_DIR / unique_filename
-
-    with file_path.open("wb") as buffer:
-        buffer.write(file_bytes)
+    public_url = await persist_upload(
+        unique_filename,
+        file_bytes,
+        content_type=content_type or mimetypes.guess_type(file.filename or "")[0] or None,
+    )
 
     media_obj = Media(
         filename=file.filename,
-        url=build_upload_public_url(unique_filename),
+        url=public_url,
         uploaded_by=current_user.id
     )
     
@@ -1348,17 +1406,23 @@ async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(
     if content_type not in {"application/pdf", "application/x-pdf"} and file_extension != ".pdf":
         raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
 
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(status_code=400, detail="Empty PDF file")
+
     unique_filename = f"{uuid.uuid4()}.pdf"
-    file_path = UPLOADS_DIR / unique_filename
+    pdf_public_url = await persist_upload(
+        unique_filename,
+        pdf_bytes,
+        content_type="application/pdf",
+        multipart=True,
+    )
 
-    with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    generated_assets = generate_pdf_page_images(file_path, Path(unique_filename).stem)
+    generated_assets = await generate_pdf_page_images(pdf_bytes, Path(unique_filename).stem)
 
     media_obj = Media(
         filename=file.filename,
-        url=build_upload_public_url(unique_filename),
+        url=pdf_public_url,
         uploaded_by=current_user.id,
         generated_pages=generated_assets["generated_pages"],
         generated_preview_pages=generated_assets["generated_preview_pages"]
