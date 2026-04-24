@@ -516,7 +516,7 @@ async def upload_bytes_to_blob(
 ) -> str:
     if not USE_VERCEL_BLOB:
         raise RuntimeError("BLOB_READ_WRITE_TOKEN environment variable is required for blob uploads")
-    client = AsyncBlobClient()
+    client = AsyncBlobClient(token=BLOB_READ_WRITE_TOKEN)
     blob = await client.put(
         normalize_blob_path(pathname),
         file_bytes,
@@ -524,7 +524,6 @@ async def upload_bytes_to_blob(
         content_type=content_type,
         add_random_suffix=False,
         overwrite=True,
-        token=BLOB_READ_WRITE_TOKEN,
         multipart=multipart,
     )
     return blob.url
