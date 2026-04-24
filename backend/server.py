@@ -1361,77 +1361,89 @@ async def update_home_settings(home_data: HomeSettingsUpdate, current_user: User
 
 @api_router.post("/media/upload", response_model=Media)
 async def upload_media(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file selected")
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file selected")
 
-    file_extension = Path(file.filename).suffix.lower()
-    content_type = (file.content_type or "").lower()
-    if not content_type.startswith("image/") and file_extension not in ALLOWED_IMAGE_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only image uploads are allowed")
+        file_extension = Path(file.filename).suffix.lower()
+        content_type = (file.content_type or "").lower()
+        if not content_type.startswith("image/") and file_extension not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Only image uploads are allowed")
 
-    if not file_extension:
-        file_extension = mimetypes.guess_extension(content_type) or ".jpg"
+        if not file_extension:
+            file_extension = mimetypes.guess_extension(content_type) or ".jpg"
 
-    file_bytes = await file.read()
-    validate_and_prepare_image_upload(file, file_bytes, file_extension)
+        file_bytes = await file.read()
+        validate_and_prepare_image_upload(file, file_bytes, file_extension)
 
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    public_url = await persist_upload(
-        unique_filename,
-        file_bytes,
-        content_type=content_type or mimetypes.guess_type(file.filename or "")[0] or None,
-    )
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        public_url = await persist_upload(
+            unique_filename,
+            file_bytes,
+            content_type=content_type or mimetypes.guess_type(file.filename or "")[0] or None,
+        )
 
-    media_obj = Media(
-        filename=file.filename,
-        url=public_url,
-        uploaded_by=current_user.id
-    )
-    
-    doc = media_obj.model_dump()
-    doc['uploaded_at'] = doc['uploaded_at'].isoformat()
-    
-    await db.media.insert_one(doc)
-    return media_obj
+        media_obj = Media(
+            filename=file.filename,
+            url=public_url,
+            uploaded_by=current_user.id
+        )
+
+        doc = media_obj.model_dump()
+        doc['uploaded_at'] = doc['uploaded_at'].isoformat()
+
+        await db.media.insert_one(doc)
+        return media_obj
+    except HTTPException:
+        raise
+    except Exception as error:
+        logging.exception("Image upload failed: %s", error)
+        raise HTTPException(status_code=500, detail=f"Image upload failed: {error}")
 
 @api_router.post("/media/upload-pdf", response_model=Media)
 async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file selected")
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file selected")
 
-    content_type = (file.content_type or "").lower()
-    file_extension = Path(file.filename).suffix.lower()
+        content_type = (file.content_type or "").lower()
+        file_extension = Path(file.filename).suffix.lower()
 
-    if content_type not in {"application/pdf", "application/x-pdf"} and file_extension != ".pdf":
-        raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
+        if content_type not in {"application/pdf", "application/x-pdf"} and file_extension != ".pdf":
+            raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
 
-    pdf_bytes = await file.read()
-    if not pdf_bytes:
-        raise HTTPException(status_code=400, detail="Empty PDF file")
+        pdf_bytes = await file.read()
+        if not pdf_bytes:
+            raise HTTPException(status_code=400, detail="Empty PDF file")
 
-    unique_filename = f"{uuid.uuid4()}.pdf"
-    pdf_public_url = await persist_upload(
-        unique_filename,
-        pdf_bytes,
-        content_type="application/pdf",
-        multipart=True,
-    )
+        unique_filename = f"{uuid.uuid4()}.pdf"
+        pdf_public_url = await persist_upload(
+            unique_filename,
+            pdf_bytes,
+            content_type="application/pdf",
+            multipart=True,
+        )
 
-    generated_assets = await generate_pdf_page_images(pdf_bytes, Path(unique_filename).stem)
+        generated_assets = await generate_pdf_page_images(pdf_bytes, Path(unique_filename).stem)
 
-    media_obj = Media(
-        filename=file.filename,
-        url=pdf_public_url,
-        uploaded_by=current_user.id,
-        generated_pages=generated_assets["generated_pages"],
-        generated_preview_pages=generated_assets["generated_preview_pages"]
-    )
+        media_obj = Media(
+            filename=file.filename,
+            url=pdf_public_url,
+            uploaded_by=current_user.id,
+            generated_pages=generated_assets["generated_pages"],
+            generated_preview_pages=generated_assets["generated_preview_pages"]
+        )
 
-    doc = media_obj.model_dump()
-    doc['uploaded_at'] = doc['uploaded_at'].isoformat()
+        doc = media_obj.model_dump()
+        doc['uploaded_at'] = doc['uploaded_at'].isoformat()
 
-    await db.media.insert_one(doc)
-    return media_obj
+        await db.media.insert_one(doc)
+        return media_obj
+    except HTTPException:
+        raise
+    except Exception as error:
+        logging.exception("PDF upload failed: %s", error)
+        raise HTTPException(status_code=500, detail=f"PDF upload failed: {error}")
 
 @api_router.get("/media", response_model=List[Media])
 async def get_media(current_user: User = Depends(get_current_user)):
