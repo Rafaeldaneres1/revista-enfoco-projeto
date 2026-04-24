@@ -22,7 +22,7 @@ from io import BytesIO
 from collections import defaultdict, deque
 from xml.etree import ElementTree
 from PIL import Image, UnidentifiedImageError
-from vercel.blob import AsyncBlobClient
+from vercel.blob import BlobClient
 
 try:
     import fitz  # PyMuPDF
@@ -516,17 +516,15 @@ async def upload_bytes_to_blob(
 ) -> str:
     if not USE_VERCEL_BLOB:
         raise RuntimeError("BLOB_READ_WRITE_TOKEN environment variable is required for blob uploads")
-
-    client = AsyncBlobClient()
-    blob = await client.put(
-        normalize_blob_path(pathname),
-        file_bytes,
-        access="public",
-        content_type=content_type,
-        overwrite=True,
-        multipart=multipart,
+    client = BlobClient(
         token=BLOB_READ_WRITE_TOKEN,
+        path=normalize_blob_path(pathname),
+        content_type=content_type,
     )
+    if multipart:
+        blob = await client.multipart_upload(file_bytes)
+    else:
+        blob = await client.upload(file_bytes)
     return blob.url
 
 async def persist_upload(
