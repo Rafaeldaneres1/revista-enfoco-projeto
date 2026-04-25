@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
 import { HAS_BACKEND, apiUrl, resolveAssetUrl } from '../lib/api';
 import { fallbackEditions } from '../data/initialContent';
@@ -30,9 +29,6 @@ const EditionReaderPage = () => {
   const [loading, setLoading] = useState(true);
   const [edition, setEdition] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const [pdfViewerUrl, setPdfViewerUrl] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState('');
 
   useEffect(() => {
     const fetchEdition = async () => {
@@ -114,51 +110,11 @@ const EditionReaderPage = () => {
   }, [edition]);
 
   const { mode: readerMode, pageImages, pdfUrl } = readerContent;
-  const usePdfReader = readerMode === 'pdf' && Boolean(pdfUrl);
+  const usePdfReader = false;
 
   useEffect(() => {
     setCurrentPage(0);
   }, [slug, edition?.id]);
-
-  useEffect(() => {
-    let objectUrl = null;
-
-    const loadPdfForViewer = async () => {
-      if (!usePdfReader || !pdfUrl) {
-        setPdfViewerUrl(null);
-        setPdfLoading(false);
-        setPdfError('');
-        return;
-      }
-
-      setPdfLoading(true);
-      setPdfError('');
-
-      try {
-        const response = await axios.get(pdfUrl, {
-          responseType: 'blob',
-          timeout: 120000
-        });
-
-        objectUrl = URL.createObjectURL(response.data);
-        setPdfViewerUrl(objectUrl);
-      } catch (error) {
-        console.error('Error preparing PDF reader view:', error);
-        setPdfViewerUrl(null);
-        setPdfError('Nao foi possivel carregar o PDF dentro do leitor. Use o botao "Abrir PDF Completo".');
-      } finally {
-        setPdfLoading(false);
-      }
-    };
-
-    loadPdfForViewer();
-
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [usePdfReader, pdfUrl]);
 
   const goPreviousPage = () => {
     if (pageImages.length <= 1) {
@@ -263,13 +219,13 @@ const EditionReaderPage = () => {
               Edicao #{edition.edition_number || 1}
             </p>
             <p className="text-sm text-stone">
-              {usePdfReader
-                ? 'Leitura completa em PDF integrada'
-                : `Pagina ${currentPage + 1} de ${pageImages.length || 1}`}
+              {pageImages.length
+                ? `Pagina ${currentPage + 1} de ${pageImages.length || 1}`
+                : 'PDF externo disponivel por link'}
             </p>
           </div>
 
-          {!usePdfReader && (
+          {pageImages.length > 1 && (
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -298,45 +254,7 @@ const EditionReaderPage = () => {
         </div>
 
         <div className="bg-porcelain border border-black/5 shadow-premium-sm p-5 lg:p-8">
-          {usePdfReader ? (
-            <div className="bg-white rounded-[30px] p-4 lg:p-6 shadow-[0_24px_70px_rgba(15,23,42,0.16)] ring-1 ring-black/6">
-              <div className="overflow-hidden rounded-[22px] bg-stone-100">
-                {pdfLoading ? (
-                  <div className="w-full h-[80vh] bg-white flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="w-12 h-12 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin mx-auto mb-4"></div>
-                      <p className="text-stone text-sm">Preparando PDF para leitura...</p>
-                    </div>
-                  </div>
-                ) : pdfViewerUrl ? (
-                  <iframe
-                    title={`Leitor PDF ${sanitizeText(edition.title)}`}
-                    src={pdfViewerUrl}
-                    className="w-full h-[80vh] bg-white"
-                  />
-                ) : (
-                  <div className="w-full h-[80vh] bg-white flex items-center justify-center px-8">
-                    <div className="max-w-xl text-center">
-                      <p className="text-charcoal font-semibold text-lg mb-3">Nao foi possivel abrir o PDF dentro do leitor.</p>
-                      <p className="text-stone text-sm leading-relaxed mb-6">
-                        {pdfError || 'Abra o arquivo completo em uma nova aba para visualizar todas as paginas da revista.'}
-                      </p>
-                      {edition.pdf_url && (
-                        <a
-                          href={resolveAssetUrl(edition.pdf_url)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-premium-primary rounded-none inline-flex"
-                        >
-                          Abrir PDF Completo
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
+          {pageImages.length ? (
             <div className="grid lg:grid-cols-[120px_minmax(0,1fr)] gap-6 lg:gap-10 items-start">
               <div className="order-2 lg:order-1">
                 <div className="grid grid-cols-4 lg:grid-cols-1 gap-3 max-h-[70vh] overflow-y-auto pr-1">
@@ -399,6 +317,28 @@ const EditionReaderPage = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-[30px] p-10 lg:p-16 shadow-[0_24px_70px_rgba(15,23,42,0.16)] ring-1 ring-black/6">
+              <div className="max-w-2xl mx-auto text-center">
+                <p className="text-charcoal font-semibold text-xl mb-4">Leitura por link externo</p>
+                <p className="text-stone text-sm leading-relaxed mb-8">
+                  Esta edicao nao usa mais o leitor interno de PDF. Quando houver um link externo
+                  cadastrado, o arquivo abre em uma nova aba.
+                </p>
+                {pdfUrl ? (
+                  <a
+                    href={pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-premium-primary rounded-none inline-flex"
+                  >
+                    Abrir PDF Completo
+                  </a>
+                ) : (
+                  <p className="text-stone text-sm">Nenhum link externo de PDF foi cadastrado para esta edicao.</p>
+                )}
               </div>
             </div>
           )}

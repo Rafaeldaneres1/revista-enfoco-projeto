@@ -22,6 +22,8 @@ from io import BytesIO
 from collections import defaultdict, deque
 from xml.etree import ElementTree
 from PIL import Image, UnidentifiedImageError
+import cloudinary
+import cloudinary.uploader
 from vercel.blob import put_async
 
 try:
@@ -36,6 +38,18 @@ UPLOADS_DIR = Path(uploads_dir_env).expanduser() if uploads_dir_env else ROOT_DI
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 BLOB_READ_WRITE_TOKEN = os.environ.get("BLOB_READ_WRITE_TOKEN")
 USE_VERCEL_BLOB = bool(BLOB_READ_WRITE_TOKEN)
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
+USE_CLOUDINARY = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
+
+if USE_CLOUDINARY:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
 
 MAX_IMAGE_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 LOGIN_RATE_LIMIT_ATTEMPTS = 5
@@ -497,8 +511,13 @@ def is_blob_url(value: Optional[str]) -> bool:
         return False
     return ".blob.vercel-storage.com/" in str(value)
 
+def is_cloudinary_url(value: Optional[str]) -> bool:
+    if not value:
+        return False
+    return "res.cloudinary.com/" in str(value)
+
 def build_upload_public_url(filename: str) -> str:
-    return filename if is_blob_url(filename) else f"/uploads/{filename}"
+    return filename if is_blob_url(filename) or is_cloudinary_url(filename) else f"/uploads/{filename}"
 
 def build_upload_storage_path(relative_path: str) -> Path:
     normalized = Path(relative_path)
@@ -506,6 +525,10 @@ def build_upload_storage_path(relative_path: str) -> Path:
 
 def normalize_blob_path(pathname: str) -> str:
     return str(pathname).replace("\\", "/").lstrip("/")
+
+def normalize_media_path(pathname: str) -> str:
+    normalized = normalize_blob_path(pathname)
+    return normalized.rsplit(".", 1)[0]
 
 async def upload_bytes_to_blob(
     pathname: str,
@@ -528,6 +551,28 @@ async def upload_bytes_to_blob(
     )
     return blob.url
 
+async def upload_bytes_to_cloudinary(
+    pathname: str,
+    file_bytes: bytes,
+    *,
+    content_type: Optional[str] = None,
+) -> str:
+    if not USE_CLOUDINARY:
+        raise RuntimeError("Cloudinary environment variables are required for Cloudinary uploads")
+    public_id = normalize_media_path(pathname)
+    folder, _, public_name = public_id.rpartition("/")
+    upload_options = {
+        "public_id": public_name or public_id,
+        "folder": folder or None,
+        "resource_type": "image",
+        "overwrite": True,
+        "invalidate": True,
+    }
+    if content_type:
+        upload_options["resource_type"] = "image" if content_type.startswith("image/") else "raw"
+    result = cloudinary.uploader.upload(file_bytes, **upload_options)
+    return result["secure_url"]
+
 async def persist_upload(
     pathname: str,
     file_bytes: bytes,
@@ -536,6 +581,12 @@ async def persist_upload(
     multipart: Optional[bool] = None
 ) -> str:
     normalized_path = normalize_blob_path(pathname)
+    if USE_CLOUDINARY:
+        return await upload_bytes_to_cloudinary(
+            normalized_path,
+            file_bytes,
+            content_type=content_type,
+        )
     if USE_VERCEL_BLOB:
         return await upload_bytes_to_blob(
             normalized_path,
@@ -1402,48 +1453,10 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
 
 @api_router.post("/media/upload-pdf", response_model=Media)
 async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
-    try:
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No file selected")
-
-        content_type = (file.content_type or "").lower()
-        file_extension = Path(file.filename).suffix.lower()
-
-        if content_type not in {"application/pdf", "application/x-pdf"} and file_extension != ".pdf":
-            raise HTTPException(status_code=400, detail="Only PDF uploads are allowed")
-
-        pdf_bytes = await file.read()
-        if not pdf_bytes:
-            raise HTTPException(status_code=400, detail="Empty PDF file")
-
-        unique_filename = f"{uuid.uuid4()}.pdf"
-        pdf_public_url = await persist_upload(
-            unique_filename,
-            pdf_bytes,
-            content_type="application/pdf",
-            multipart=True,
-        )
-
-        generated_assets = await generate_pdf_page_images(pdf_bytes, Path(unique_filename).stem)
-
-        media_obj = Media(
-            filename=file.filename,
-            url=pdf_public_url,
-            uploaded_by=current_user.id,
-            generated_pages=generated_assets["generated_pages"],
-            generated_preview_pages=generated_assets["generated_preview_pages"]
-        )
-
-        doc = media_obj.model_dump()
-        doc['uploaded_at'] = doc['uploaded_at'].isoformat()
-
-        await db.media.insert_one(doc)
-        return media_obj
-    except HTTPException:
-        raise
-    except Exception as error:
-        logging.exception("PDF upload failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"PDF upload failed: {error}")
+    raise HTTPException(
+        status_code=400,
+        detail="PDF upload was disabled. Please provide an external PDF URL in the edition form."
+    )
 
 @api_router.get("/media", response_model=List[Media])
 async def get_media(current_user: User = Depends(get_current_user)):

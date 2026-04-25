@@ -85,10 +85,7 @@ const AdminImageField = ({
 
     try {
       const response = await axios.post(apiUrl('/api/media/upload'), payload, {
-        headers: {
-          
-          'Content-Type': 'multipart/form-data'
-        }
+        headers: {}
       });
 
       onChange(normalizeUploadedImageUrl(response.data?.url || ''));

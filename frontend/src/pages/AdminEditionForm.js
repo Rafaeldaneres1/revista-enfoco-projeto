@@ -1,19 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
-import { apiUrl, normalizeUploadedImageUrl } from '../lib/api';
+import { apiUrl } from '../lib/api';
 import AdminImageField from '../components/AdminImageField';
 import AdminImageGalleryField from '../components/AdminImageGalleryField';
-
-const ACCEPTED_PDF_TYPES = new Set(['application/pdf', 'application/x-pdf']);
-const PDF_UPLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
 const AdminEditionForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
   const token = 'cookie-session';
-  const pdfInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -30,9 +26,6 @@ const AdminEditionForm = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [error, setError] = useState('');
-  const [uploadingPdf, setUploadingPdf] = useState(false);
-  const [pdfError, setPdfError] = useState('');
-  const [pdfUploadProgress, setPdfUploadProgress] = useState(0);
 
   useEffect(() => {
     if (!token) {
@@ -75,82 +68,6 @@ const AdminEditionForm = () => {
 
     fetchEdition();
   }, [token, navigate, id, isEdit]);
-
-  const openPdfPicker = () => {
-    setPdfError('');
-    setPdfUploadProgress(0);
-    pdfInputRef.current?.click();
-  };
-
-  const handlePdfUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    setPdfError('');
-
-    const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    if (!ACCEPTED_PDF_TYPES.has((file.type || '').toLowerCase()) && fileExtension !== 'pdf') {
-      setPdfError('Escolha um arquivo PDF valido.');
-      event.target.value = '';
-      return;
-    }
-
-    setUploadingPdf(true);
-    setPdfUploadProgress(0);
-
-    try {
-      const payload = new FormData();
-      payload.append('file', file);
-
-      const response = await axios.post(apiUrl('/api/media/upload-pdf'), payload, {
-        headers: {
-          
-        },
-        timeout: PDF_UPLOAD_TIMEOUT_MS,
-        onUploadProgress: (progressEvent) => {
-          if (!progressEvent.total) {
-            return;
-          }
-
-          const nextProgress = Math.min(
-            100,
-            Math.max(1, Math.round((progressEvent.loaded / progressEvent.total) * 100))
-          );
-          setPdfUploadProgress(nextProgress);
-        }
-      });
-
-      const generatedReaderPages = Array.isArray(response.data?.generated_pages)
-        ? response.data.generated_pages.map((item) => normalizeUploadedImageUrl(item)).filter(Boolean)
-        : [];
-      const generatedPreviewPages = Array.isArray(response.data?.generated_preview_pages)
-        ? response.data.generated_preview_pages.map((item) => normalizeUploadedImageUrl(item)).filter(Boolean)
-        : [];
-
-      setFormData((current) => ({
-        ...current,
-        pdf_url: normalizeUploadedImageUrl(response.data?.url || ''),
-        reader_pages: generatedReaderPages.length ? generatedReaderPages : current.reader_pages,
-        preview_pages: generatedPreviewPages.length ? generatedPreviewPages : current.preview_pages,
-        page_count: generatedReaderPages.length ? String(generatedReaderPages.length) : current.page_count,
-        pages_base_path: generatedReaderPages.length ? '' : current.pages_base_path
-      }));
-      setPdfUploadProgress(100);
-    } catch (uploadError) {
-      console.error('Error uploading edition PDF:', uploadError);
-
-      if (uploadError.code === 'ECONNABORTED') {
-        setPdfError('O envio do PDF demorou demais. Tente um arquivo menor ou envie novamente.');
-      } else {
-        setPdfError(uploadError?.response?.data?.detail || 'Nao foi possivel enviar o PDF.');
-      }
-    } finally {
-      setUploadingPdf(false);
-      event.target.value = '';
-    }
-  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -266,67 +183,29 @@ const AdminEditionForm = () => {
                 <div>
                   <h2 className="font-display text-2xl font-bold text-charcoal">PDF da revista</h2>
                   <p className="text-sm text-stone mt-2">
-                    Envie o PDF real da edicao ou cole uma URL pronta. Esse link alimenta o botao
-                    "Abrir PDF" do site.
+                    Use apenas uma URL externa para o PDF da edicao. Esse link alimenta o botao
+                    "Abrir PDF" do site e evita ocupar o storage de imagens da revista.
                   </p>
                   <p className="text-xs text-stone/90 mt-2">
-                    PDFs grandes tambem sao aceitos. Ao enviar o PDF, o sistema tenta gerar
-                    automaticamente as paginas do leitor e as paginas de previa.
+                    Recomendado: Google Drive, Dropbox, Cloudinary ou outro host dedicado para PDF.
+                    O upload direto de PDF pelo admin foi desativado para preservar espaco da midia.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={openPdfPicker}
-                  disabled={uploadingPdf}
-                  className="px-5 py-3 rounded-full bg-charcoal text-white text-sm font-semibold hover:bg-charcoal-light transition-colors disabled:opacity-60"
-                >
-                  {uploadingPdf ? 'Enviando PDF...' : 'Enviar PDF'}
-                </button>
+                <span className="px-5 py-3 rounded-full border border-charcoal/14 text-charcoal text-sm font-semibold bg-white/70">
+                  Use link externo
+                </span>
               </div>
 
-              <input
-                ref={pdfInputRef}
-                type="file"
-                accept=".pdf,application/pdf"
-                onChange={handlePdfUpload}
-                className="hidden"
-              />
-
               <div>
-                <label className="block text-sm font-medium text-charcoal mb-2">URL do PDF</label>
+                <label className="block text-sm font-medium text-charcoal mb-2">URL externa do PDF</label>
                 <input
                   type="text"
                   value={formData.pdf_url}
                   onChange={(event) => setFormData({ ...formData, pdf_url: event.target.value })}
                   className="w-full px-4 py-3 rounded-2xl border border-charcoal/10 bg-white/50 focus:outline-none focus:ring-2 focus:ring-charcoal/20"
-                  placeholder="/uploads/revista-edicao.pdf"
+                  placeholder="https://exemplo.com/revista-edicao.pdf"
                 />
               </div>
-
-              {pdfError && (
-                <div className="p-3 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm">
-                  {pdfError}
-                </div>
-              )}
-
-              {uploadingPdf && (
-                <div className="rounded-[20px] border border-charcoal/10 bg-white/70 px-4 py-4 space-y-3">
-                  <div className="flex items-center justify-between gap-4 text-sm text-charcoal">
-                    <span>Enviando PDF grande...</span>
-                    <span className="font-semibold">{pdfUploadProgress}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-charcoal/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-royal-blue transition-all duration-300"
-                      style={{ width: `${pdfUploadProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-stone">
-                    Em uploads grandes via navegador e ngrok, a etapa final pode demorar um pouco
-                    mesmo depois de chegar perto de 100%.
-                  </p>
-                </div>
-              )}
 
               {formData.pdf_url && (
                 <div className="rounded-[20px] border border-charcoal/10 bg-white/70 px-4 py-4 text-sm text-charcoal">
