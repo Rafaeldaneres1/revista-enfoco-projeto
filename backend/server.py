@@ -4,10 +4,14 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import pymongo
 import os
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 from typing import Dict, List, Optional
@@ -72,7 +76,7 @@ def parse_cors_origins(raw_origins: Optional[str]) -> List[str]:
 ALLOWED_CORS_ORIGINS = parse_cors_origins(os.environ.get('CORS_ORIGINS'))
 COOKIE_IS_SECURE = any(origin.startswith("https://") for origin in ALLOWED_CORS_ORIGINS)
 COOKIE_SAMESITE = "none" if COOKIE_IS_SECURE else "lax"
-AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days in seconds
+AUTH_COOKIE_MAX_AGE = 60 * 60 * 2  # 2 hours in seconds
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -87,7 +91,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 120  # 2 hours
 
 # Security
 security = HTTPBearer(auto_error=False)
@@ -97,288 +101,68 @@ login_attempts: Dict[str, deque] = defaultdict(deque)
 app = FastAPI(title="Revista Enfoco API")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+raw_hosts = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
+allowed_hosts = [h.strip() for h in raw_hosts.split(",") if h.strip()]
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
+
+@app.on_event("startup")
+async def startup_db_client():
+    # Setup MongoDB indexes
+    try:
+        await db.posts.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.posts.create_index([("slug", pymongo.ASCENDING)])
+
+    await db.posts.create_index([("published", pymongo.ASCENDING)])
+    await db.posts.create_index([("category_id", pymongo.ASCENDING)])
+
+    try:
+        await db.categories.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.categories.create_index([("slug", pymongo.ASCENDING)])
+
+    try:
+        await db.columns.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.columns.create_index([("slug", pymongo.ASCENDING)])
+
+    await db.columns.create_index([("columnist_id", pymongo.ASCENDING)])
+
+    try:
+        await db.events.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.events.create_index([("slug", pymongo.ASCENDING)])
+
+    try:
+        await db.editions.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.editions.create_index([("slug", pymongo.ASCENDING)])
+
+    try:
+        await db.users.create_index([("email", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.users.create_index([("email", pymongo.ASCENDING)])
+    await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.login_attempts.create_index("key", unique=True)
+    await db.login_attempts.create_index("expires_at", expireAfterSeconds=0)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-# ============ MODELS ============
-
-# User Models
-class UserBase(BaseModel):
-    email: EmailStr
-    name: str
-    role: str = "editor"  # admin or editor
-
-class UserCreate(UserBase):
-    password: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class User(UserBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class UserInDB(User):
-    hashed_password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    user: User
-
-# Post Models (Notícias)
-class PostBase(BaseModel):
-    title: str
-    content: str
-    excerpt: str
-    category: str = "Geral"
-    category_id: Optional[str] = None
-    category_slug: Optional[str] = None
-    featured_image: Optional[str] = None
-    image_position: Optional[str] = None
-    author_name: Optional[str] = None
-    destaque_principal_home: bool = False
-    destaque_secundario_home: bool = False
-    ordem_destaque: int = 0
-    published: bool = True
-
-class PostCreate(PostBase):
-    pass
-
-class Post(PostBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slug: str
-    author_id: str
-    author_name: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Column Models (Colunas)
-class ColumnBase(BaseModel):
-    title: str
-    content: str
-    excerpt: str
-    featured_image: Optional[str] = None
-    image_position: Optional[str] = None
-    columnist_id: Optional[str] = None
-    author_name: Optional[str] = None
-    author_role: Optional[str] = None
-    author_bio: Optional[str] = None
-    author_image: Optional[str] = None
-    published: bool = True
-
-class ColumnCreate(ColumnBase):
-    pass
-
-class Column(ColumnBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slug: str
-    author_id: str
-    author_name: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Event Models (Eventos)
-class EventBase(BaseModel):
-    title: str
-    description: str
-    event_date: datetime
-    location: Optional[str] = None
-    event_images: List[str] = Field(default_factory=list)
-    published: bool = True
-
-class EventCreate(EventBase):
-    pass
-
-class Event(EventBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slug: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Edition Models (Edições)
-class EditionBase(BaseModel):
-    title: str
-    description: str
-    cover_image: Optional[str] = None
-    edition_number: int
-    pdf_url: Optional[str] = None
-    page_count: Optional[int] = None
-    pages_base_path: Optional[str] = None
-    reader_pages: List[str] = Field(default_factory=list)
-    preview_pages: List[str] = Field(default_factory=list)
-    published: bool = True
-
-class EditionCreate(EditionBase):
-    pass
-
-class Edition(EditionBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slug: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Category Models
-HEX_COLOR_RE = re.compile(r"^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
-
-class CategoryBase(BaseModel):
-    name: str
-    color: str = "#3B82F6"
-    active: bool = True
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Category name is required")
-        return normalized
-
-    @field_validator("color")
-    @classmethod
-    def validate_color(cls, value: str) -> str:
-        normalized = value.strip()
-        if not HEX_COLOR_RE.fullmatch(normalized):
-            raise ValueError("Color must be a valid HEX value like #3B82F6")
-        return normalized.upper()
-
-class CategoryCreate(CategoryBase):
-    pass
-
-class Category(CategoryBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    slug: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Editorial Team Models
-class TeamMemberBase(BaseModel):
-    name: str
-    role: str
-    image: Optional[str] = None
-    bio: str
-    display_order: int = 0
-    published: bool = True
-
-class TeamMemberCreate(TeamMemberBase):
-    pass
-
-class TeamMember(TeamMemberBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Columnist Models
-class ColumnistBase(BaseModel):
-    name: str
-    role: str
-    bio: str
-    image: Optional[str] = None
-
-class ColumnistCreate(ColumnistBase):
-    pass
-
-class Columnist(ColumnistBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class AboutValueItem(BaseModel):
-    title: str
-    description: str
-
-class AboutSocialLinks(BaseModel):
-    instagram: Optional[str] = None
-    facebook: Optional[str] = None
-    linkedin: Optional[str] = None
-
-class AboutSettingsBase(BaseModel):
-    location: str = "Santa Maria - RS"
-    cover_image: Optional[str] = None
-    eyebrow: str
-    hero_title: str
-    intro: str
-    paragraphs: List[str] = Field(default_factory=list)
-    mission: str
-    values: List[AboutValueItem] = Field(default_factory=list)
-    team_title: str = "Equipe Editorial"
-    team_description: str = "Rostos e vozes que ajudam a construir a presença editorial da EnFoco com sensibilidade e identidade."
-    contact_title: str = "Entre em Contato"
-    contact_description: str = "Os canais oficiais serão publicados assim que o material institucional definitivo for enviado."
-    contact_email: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_city: str = "Santa Maria - RS"
-    social: AboutSocialLinks = Field(default_factory=AboutSocialLinks)
-
-class AboutSettingsUpdate(AboutSettingsBase):
-    pass
-
-class AboutSettings(AboutSettingsBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = "about-page"
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class HomeSettingsBase(BaseModel):
-    archive_editions: List[dict] = Field(default_factory=list)
-    home_columns: List[dict] = Field(default_factory=list)
-    hero_display_mode: str = "fixed"
-    hero_featured_post_id: Optional[str] = None
-    selected_post_ids: List[str] = Field(default_factory=list)
-    featured_edition_id: Optional[str] = None
-    hero_override_image: Optional[str] = None
-    featured_edition_override_image: Optional[str] = None
-    hero_primary_cta_label: str = "Ler Matéria"
-    hero_secondary_cta_label: str = "Mais notícias"
-    hero_secondary_label: str = "Também em Destaque"
-    featured_edition_label: str = "Em Destaque"
-    featured_edition_title: str = "Edição Atual"
-    featured_edition_primary_cta_label: str = "Abrir Revista"
-    featured_edition_secondary_cta_label: str = "Ver Edição"
-    recommended_label: str = "Leitura Recomendada"
-    recommended_title_prefix: str = "Artigos em"
-    recommended_title_emphasis: str = "Destaque"
-    recommended_link_label: str = "Ver Todos"
-    recommended_empty_message: str = "As chamadas editoriais da home serão exibidas aqui assim que as primeiras notícias forem cadastradas no backend."
-    archive_label: str = "Acervo da Revista"
-    archive_title: str = "Edições para navegar"
-    archive_description: str = "Clique na capa para abrir o PDF e use as setas para navegar pelo acervo ou pelas páginas de prévia."
-    archive_primary_cta_label: str = "Abrir PDF Completo"
-    archive_secondary_cta_label: str = "Ver Edição"
-    archive_empty_message: str = "As edições da revista serão exibidas aqui assim que forem cadastradas no backend."
-
-    columns_label: str = "Colunas"
-    columns_title: str = "Vozes em destaque"
-    columns_description: str = "Textos autorais, leituras de contexto e pontos de vista que ampliam a experiÃªncia editorial da Revista Enfoco."
-    columns_link_label: str = "Ver Colunas"
-    columns_empty_message: str = "As colunas publicadas aparecerÃ£o aqui assim que a curadoria editorial desta seÃ§Ã£o for preenchida."
-
-class HomeSettingsUpdate(HomeSettingsBase):
-    pass
-
-class HomeSettings(HomeSettingsBase):
-    model_config = ConfigDict(extra="ignore")
-    id: str = "home-page"
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-# Media Models
-class Media(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    filename: str
-    url: str
-    uploaded_by: str
-    generated_pages: List[str] = Field(default_factory=list)
-    generated_preview_pages: List[str] = Field(default_factory=list)
-    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+from models import *
 
 # ============ HELPER FUNCTIONS ============
 
@@ -395,25 +179,36 @@ def ensure_admin(current_user: User) -> None:
             detail="Only admins can perform this action"
         )
 
-def _prune_login_attempts(client_key: str, now: datetime) -> deque:
-    attempts = login_attempts[client_key]
-    cutoff = now - LOGIN_RATE_LIMIT_WINDOW
-    while attempts and attempts[0] < cutoff:
-        attempts.popleft()
-    return attempts
-
-def enforce_login_rate_limit(client_key: str) -> None:
+async def enforce_login_rate_limit(client_key: str) -> None:
     now = datetime.now(timezone.utc)
-    attempts = _prune_login_attempts(client_key, now)
-    if len(attempts) >= LOGIN_RATE_LIMIT_ATTEMPTS:
+    cutoff = now - LOGIN_RATE_LIMIT_WINDOW
+
+    doc = await db.login_attempts.find_one({"key": client_key})
+    attempts = doc.get("attempts", []) if doc else []
+
+    valid_attempts = []
+    for t in attempts:
+        t_aware = t.replace(tzinfo=timezone.utc) if t.tzinfo is None else t
+        if t_aware >= cutoff:
+            valid_attempts.append(t_aware)
+
+    if len(valid_attempts) >= LOGIN_RATE_LIMIT_ATTEMPTS:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Too many login attempts. Please try again later."
         )
-    attempts.append(now)
 
-def clear_login_rate_limit(client_key: str) -> None:
-    login_attempts.pop(client_key, None)
+    valid_attempts.append(now)
+    expires_at = valid_attempts[0] + LOGIN_RATE_LIMIT_WINDOW
+
+    await db.login_attempts.update_one(
+        {"key": client_key},
+        {"$set": {"attempts": valid_attempts, "expires_at": expires_at}},
+        upsert=True
+    )
+
+async def clear_login_rate_limit(client_key: str) -> None:
+    await db.login_attempts.delete_one({"key": client_key})
 
 def get_request_client_key(request: Request, email: Optional[str] = None) -> str:
     forwarded_for = request.headers.get("x-forwarded-for", "")
@@ -439,6 +234,22 @@ def validate_and_prepare_image_upload(file: UploadFile, file_bytes: bytes, file_
             raise HTTPException(status_code=400, detail="Invalid SVG image")
         if not root.tag.lower().endswith("svg"):
             raise HTTPException(status_code=400, detail="Invalid SVG image")
+
+        for elem in root.iter():
+            tag_name = elem.tag.split("}")[-1].lower() if "}" in elem.tag else elem.tag.lower()
+            if tag_name in ("script", "foreignobject"):
+                raise HTTPException(status_code=400, detail="SVG contém código potencialmente malicioso e não pode ser aceito")
+
+            for attr_name, attr_value in elem.attrib.items():
+                attr_name_lower = attr_name.lower()
+                attr_val_lower = attr_value.lower().strip()
+                if attr_name_lower.startswith("on"):
+                    raise HTTPException(status_code=400, detail="SVG contém código potencialmente malicioso e não pode ser aceito")
+                if attr_name_lower in ("href", "xlink:href") and (attr_val_lower.startswith("javascript:") or attr_val_lower.startswith("data:text/html")):
+                    raise HTTPException(status_code=400, detail="SVG contém código potencialmente malicioso e não pode ser aceito")
+                if attr_name_lower == "src" and attr_val_lower.startswith("javascript:"):
+                    raise HTTPException(status_code=400, detail="SVG contém código potencialmente malicioso e não pode ser aceito")
+
         return
 
     try:
@@ -486,21 +297,30 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        revoked = await db.revoked_tokens.find_one({"token": token})
+        if revoked:
+            raise HTTPException(status_code=401, detail="Sessão encerrada")
+
         user_id: str = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    except HTTPException:
+        raise
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.JWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
-    
+    except Exception:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    
+
     if isinstance(user.get('created_at'), str):
         user['created_at'] = datetime.fromisoformat(user['created_at'])
-    
+
     return User(**{k: v for k, v in user.items() if k != 'hashed_password'})
 
 def create_slug(title: str) -> str:
@@ -670,6 +490,81 @@ def dedupe_posts(posts: List[dict]) -> List[dict]:
 
     return unique_posts
 
+def normalize_author_lookup_key(value: Optional[str]) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or ""))
+    without_accents = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    return re.sub(r"\s+", " ", without_accents).strip().lower()
+
+def hydrate_post_with_team_member(post: Optional[dict], member: Optional[dict]) -> Optional[dict]:
+    if not post or not member:
+        return post
+
+    post["author_member_id"] = member.get("id") or post.get("author_member_id")
+    post["author_name"] = member.get("name") or post.get("author_name")
+    post["author_image"] = member.get("image") or post.get("author_image")
+    return post
+
+async def hydrate_posts_with_team_members(posts: List[dict]) -> List[dict]:
+    if not posts:
+        return posts
+
+    author_member_ids = sorted({
+        post.get("author_member_id")
+        for post in posts
+        if post.get("author_member_id")
+    })
+    author_names = sorted({
+        normalize_author_lookup_key(post.get("author_name"))
+        for post in posts
+        if post.get("author_name") and not post.get("author_member_id")
+    })
+
+    team_members = await db.team.find({"published": True}, {"_id": 0}).to_list(500)
+    serialized_members = [
+        serialize_datetimes(member, "created_at", "updated_at")
+        for member in team_members
+    ]
+
+    members_by_id = {
+        member["id"]: member
+        for member in serialized_members
+        if member.get("id") in author_member_ids
+    }
+    members_by_name = {
+        normalize_author_lookup_key(member.get("name")): member
+        for member in serialized_members
+        if normalize_author_lookup_key(member.get("name")) in author_names
+    }
+
+    for post in posts:
+        member = None
+        if post.get("author_member_id"):
+            member = members_by_id.get(post.get("author_member_id"))
+        if not member and post.get("author_name"):
+            member = members_by_name.get(normalize_author_lookup_key(post.get("author_name")))
+        hydrate_post_with_team_member(post, member)
+
+    return posts
+
+async def apply_team_member_to_post_payload(post_dict: dict) -> dict:
+    author_member_id = post_dict.get("author_member_id")
+
+    if author_member_id:
+        member = await db.team.find_one(
+            {"id": author_member_id, "published": True},
+            {"_id": 0}
+        )
+        if not member:
+            raise HTTPException(status_code=400, detail="Author not found")
+
+        post_dict["author_name"] = member.get("name") or ""
+        post_dict["author_image"] = member.get("image") or ""
+        return post_dict
+
+    post_dict["author_member_id"] = None
+    post_dict["author_image"] = None
+    return post_dict
+
 def hydrate_column_with_columnist(column: Optional[dict], columnist: Optional[dict]) -> Optional[dict]:
     if not column or not columnist:
         return column
@@ -784,43 +679,57 @@ async def register(user_data: UserCreate, current_user: User = Depends(get_curre
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     # Create user
     hashed_password = get_password_hash(user_data.password)
     user_dict = user_data.model_dump(exclude={'password'})
     user_obj = User(**user_dict)
-    
+
     user_in_db = UserInDB(**user_obj.model_dump(), hashed_password=hashed_password)
     doc = user_in_db.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
-    
+
     await db.users.insert_one(doc)
     return user_obj
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(user_data: UserLogin, request: Request, response: Response):
     client_key = get_request_client_key(request, user_data.email)
-    enforce_login_rate_limit(client_key)
+    await enforce_login_rate_limit(client_key)
     user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
+
     if not verify_password(user_data.password, user['hashed_password']):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
-    clear_login_rate_limit(client_key)
+
+    await clear_login_rate_limit(client_key)
     access_token = create_access_token(data={"sub": user['id']})
     set_auth_cookie(response, access_token)
-    
+
     if isinstance(user.get('created_at'), str):
         user['created_at'] = datetime.fromisoformat(user['created_at'])
-    
+
     user_obj = User(**{k: v for k, v in user.items() if k != 'hashed_password'})
-    
+
     return Token(access_token=access_token, token_type="bearer", user=user_obj)
 
 @api_router.post("/auth/logout")
-async def logout(response: Response):
+async def logout(request: Request, response: Response):
+    auth_header = request.headers.get("Authorization")
+    token = auth_header.replace("Bearer ", "") if auth_header and auth_header.startswith("Bearer ") else request.cookies.get(AUTH_COOKIE_NAME)
+
+    if token:
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            if "exp" in payload:
+                await db.revoked_tokens.insert_one({
+                    "token": token,
+                    "expires_at": datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+                })
+        except Exception:
+            pass
+
     clear_auth_cookie(response)
     return {"message": "Logged out successfully"}
 
@@ -838,13 +747,11 @@ async def get_posts(limit: int = 100, skip: int = 0, published: Optional[bool] =
 
     posts = await db.posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
 
-    for post in posts:
-        if isinstance(post.get('created_at'), str):
-            post['created_at'] = datetime.fromisoformat(post['created_at'])
-        if isinstance(post.get('updated_at'), str):
-            post['updated_at'] = datetime.fromisoformat(post['updated_at'])
-
-    posts = dedupe_posts(posts)
+    posts = [
+        normalize_post_datetimes(post)
+        for post in posts
+    ]
+    posts = await hydrate_posts_with_team_members(dedupe_posts(posts))
     return posts[skip:skip + limit]
 
 @api_router.get("/posts/{slug}", response_model=Post)
@@ -857,22 +764,24 @@ async def get_post(slug: str):
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
+    await hydrate_posts_with_team_members([post])
     return post
 
 @api_router.post("/posts", response_model=Post)
 async def create_post(post_data: PostCreate, current_user: User = Depends(get_current_user)):
     post_dict = post_data.model_dump()
     post_dict = await resolve_post_category_reference(post_dict)
+    post_dict = await apply_team_member_to_post_payload(post_dict)
     post_dict = await enforce_home_highlight_rules(post_dict)
     post_dict['slug'] = create_slug(post_data.title)
     post_dict['author_id'] = current_user.id
     post_dict['author_name'] = post_dict.get('author_name') or current_user.name
-    
+
     post_obj = Post(**post_dict)
     doc = post_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
+
     await db.posts.insert_one(doc)
     return post_obj
 
@@ -881,21 +790,20 @@ async def update_post(post_id: str, post_data: PostCreate, current_user: User = 
     existing_post = await db.posts.find_one({"id": post_id}, {"_id": 0})
     if not existing_post:
         raise HTTPException(status_code=404, detail="Post not found")
-    
+
     post_dict = post_data.model_dump()
     post_dict = await resolve_post_category_reference(post_dict, allow_inactive_id=existing_post.get("category_id"))
+    post_dict = await apply_team_member_to_post_payload(post_dict)
     post_dict = await enforce_home_highlight_rules(post_dict, current_post_id=post_id)
     post_dict['slug'] = create_slug(post_data.title)
     post_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.posts.update_one({"id": post_id}, {"$set": post_dict})
-    
+
     updated_post = await db.posts.find_one({"id": post_id}, {"_id": 0})
-    if isinstance(updated_post.get('created_at'), str):
-        updated_post['created_at'] = datetime.fromisoformat(updated_post['created_at'])
-    if isinstance(updated_post.get('updated_at'), str):
-        updated_post['updated_at'] = datetime.fromisoformat(updated_post['updated_at'])
-    
+    normalize_post_datetimes(updated_post)
+    await hydrate_posts_with_team_members([updated_post])
+
     return updated_post
 
 @api_router.delete("/posts/{post_id}")
@@ -913,6 +821,7 @@ async def get_home_highlights():
     ).sort([("updated_at", -1), ("created_at", -1)]).to_list(10)
 
     featured_candidates = dedupe_posts([normalize_post_datetimes(post) for post in featured_candidates])
+    featured_candidates = await hydrate_posts_with_team_members(featured_candidates)
     featured_post = featured_candidates[0] if featured_candidates else None
 
     secondary_posts = await db.posts.find(
@@ -927,6 +836,7 @@ async def get_home_highlights():
         )
         if not featured_post or get_post_identity(post) != get_post_identity(featured_post)
     ]
+    secondary_posts = await hydrate_posts_with_team_members(secondary_posts)
 
     return {
         "featured_post": featured_post,
@@ -940,7 +850,7 @@ async def get_columns(limit: int = 100, skip: int = 0, published: Optional[bool]
     query = {}
     if published is not None:
         query['published'] = published
-    
+
     columns = await db.columns.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     columnists_map = await get_columnists_map([column.get("columnist_id") for column in columns])
 
@@ -973,12 +883,12 @@ async def create_column(column_data: ColumnCreate, current_user: User = Depends(
     column_dict['slug'] = create_slug(column_data.title)
     column_dict['author_id'] = current_user.id
     column_dict['author_name'] = column_dict.get('author_name') or current_user.name
-    
+
     column_obj = Column(**column_dict)
     doc = column_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
+
     await db.columns.insert_one(doc)
     return column_obj
 
@@ -987,14 +897,14 @@ async def update_column(column_id: str, column_data: ColumnCreate, current_user:
     existing_column = await db.columns.find_one({"id": column_id}, {"_id": 0})
     if not existing_column:
         raise HTTPException(status_code=404, detail="Column not found")
-    
+
     column_dict = column_data.model_dump()
     column_dict = await apply_columnist_to_column_payload(column_dict)
     column_dict['slug'] = create_slug(column_data.title)
     column_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.columns.update_one({"id": column_id}, {"$set": column_dict})
-    
+
     updated_column = await db.columns.find_one({"id": column_id}, {"_id": 0})
     serialize_datetimes(updated_column, 'created_at', 'updated_at')
     columnist = None
@@ -1020,9 +930,9 @@ async def get_events(limit: int = 100, skip: int = 0, published: Optional[bool] 
     query = {}
     if published is not None:
         query['published'] = published
-    
+
     events = await db.events.find(query, {"_id": 0}).sort("event_date", 1).skip(skip).limit(limit).to_list(limit)
-    
+
     for event in events:
         if isinstance(event.get('created_at'), str):
             event['created_at'] = datetime.fromisoformat(event['created_at'])
@@ -1030,7 +940,7 @@ async def get_events(limit: int = 100, skip: int = 0, published: Optional[bool] 
             event['updated_at'] = datetime.fromisoformat(event['updated_at'])
         if isinstance(event.get('event_date'), str):
             event['event_date'] = datetime.fromisoformat(event['event_date'])
-    
+
     return events
 
 @api_router.get("/events/{slug}", response_model=Event)
@@ -1038,14 +948,14 @@ async def get_event(slug: str):
     event = await db.events.find_one({"slug": slug}, {"_id": 0})
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
+
     if isinstance(event.get('created_at'), str):
         event['created_at'] = datetime.fromisoformat(event['created_at'])
     if isinstance(event.get('updated_at'), str):
         event['updated_at'] = datetime.fromisoformat(event['updated_at'])
     if isinstance(event.get('event_date'), str):
         event['event_date'] = datetime.fromisoformat(event['event_date'])
-    
+
     return event
 
 @api_router.post("/events", response_model=Event)
@@ -1053,12 +963,12 @@ async def create_event(event_data: EventCreate, current_user: User = Depends(get
     event_dict = event_data.model_dump()
     event_dict['slug'] = create_slug(event_data.title)
     event_dict['event_date'] = event_dict['event_date'].isoformat()
-    
+
     event_obj = Event(**event_dict)
     doc = event_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
+
     await db.events.insert_one(doc)
     created_event = await db.events.find_one({"id": event_obj.id}, {"_id": 0})
     if isinstance(created_event.get('created_at'), str):
@@ -1075,14 +985,14 @@ async def update_event(event_id: str, event_data: EventCreate, current_user: Use
     existing_event = await db.events.find_one({"id": event_id}, {"_id": 0})
     if not existing_event:
         raise HTTPException(status_code=404, detail="Event not found")
-    
+
     event_dict = event_data.model_dump()
     event_dict['slug'] = create_slug(event_data.title)
     event_dict['event_date'] = event_dict['event_date'].isoformat()
     event_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.events.update_one({"id": event_id}, {"$set": event_dict})
-    
+
     updated_event = await db.events.find_one({"id": event_id}, {"_id": 0})
     if isinstance(updated_event.get('created_at'), str):
         updated_event['created_at'] = datetime.fromisoformat(updated_event['created_at'])
@@ -1090,7 +1000,7 @@ async def update_event(event_id: str, event_data: EventCreate, current_user: Use
         updated_event['updated_at'] = datetime.fromisoformat(updated_event['updated_at'])
     if isinstance(updated_event.get('event_date'), str):
         updated_event['event_date'] = datetime.fromisoformat(updated_event['event_date'])
-    
+
     return updated_event
 
 @api_router.delete("/events/{event_id}")
@@ -1107,15 +1017,15 @@ async def get_editions(limit: int = 100, skip: int = 0, published: Optional[bool
     query = {}
     if published is not None:
         query['published'] = published
-    
+
     editions = await db.editions.find(query, {"_id": 0}).sort("edition_number", -1).skip(skip).limit(limit).to_list(limit)
-    
+
     for edition in editions:
         if isinstance(edition.get('created_at'), str):
             edition['created_at'] = datetime.fromisoformat(edition['created_at'])
         if isinstance(edition.get('updated_at'), str):
             edition['updated_at'] = datetime.fromisoformat(edition['updated_at'])
-    
+
     return editions
 
 @api_router.get("/editions/{slug}", response_model=Edition)
@@ -1123,24 +1033,24 @@ async def get_edition(slug: str):
     edition = await db.editions.find_one({"slug": slug}, {"_id": 0})
     if not edition:
         raise HTTPException(status_code=404, detail="Edition not found")
-    
+
     if isinstance(edition.get('created_at'), str):
         edition['created_at'] = datetime.fromisoformat(edition['created_at'])
     if isinstance(edition.get('updated_at'), str):
         edition['updated_at'] = datetime.fromisoformat(edition['updated_at'])
-    
+
     return edition
 
 @api_router.post("/editions", response_model=Edition)
 async def create_edition(edition_data: EditionCreate, current_user: User = Depends(get_current_user)):
     edition_dict = edition_data.model_dump()
     edition_dict['slug'] = create_slug(edition_data.title)
-    
+
     edition_obj = Edition(**edition_dict)
     doc = edition_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
+
     await db.editions.insert_one(doc)
     return edition_obj
 
@@ -1149,19 +1059,19 @@ async def update_edition(edition_id: str, edition_data: EditionCreate, current_u
     existing_edition = await db.editions.find_one({"id": edition_id}, {"_id": 0})
     if not existing_edition:
         raise HTTPException(status_code=404, detail="Edition not found")
-    
+
     edition_dict = edition_data.model_dump()
     edition_dict['slug'] = create_slug(edition_data.title)
     edition_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+
     await db.editions.update_one({"id": edition_id}, {"$set": edition_dict})
-    
+
     updated_edition = await db.editions.find_one({"id": edition_id}, {"_id": 0})
     if isinstance(updated_edition.get('created_at'), str):
         updated_edition['created_at'] = datetime.fromisoformat(updated_edition['created_at'])
     if isinstance(updated_edition.get('updated_at'), str):
         updated_edition['updated_at'] = datetime.fromisoformat(updated_edition['updated_at'])
-    
+
     return updated_edition
 
 @api_router.delete("/editions/{edition_id}")
@@ -1461,11 +1371,11 @@ async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(
 @api_router.get("/media", response_model=List[Media])
 async def get_media(current_user: User = Depends(get_current_user)):
     media_list = await db.media.find({}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
-    
+
     for media in media_list:
         if isinstance(media.get('uploaded_at'), str):
             media['uploaded_at'] = datetime.fromisoformat(media['uploaded_at'])
-    
+
     return media_list
 
 @api_router.get("/media/{filename}")
@@ -1487,16 +1397,16 @@ async def get_home_data():
 
     # Get latest post
     latest_posts = await db.posts.find({"published": True}, {"_id": 0}).sort("created_at", -1).to_list(200)
-    
+
     # Get latest columns
     latest_columns = await db.columns.find({"published": True}, {"_id": 0}).sort("created_at", -1).limit(12).to_list(12)
-    
+
     # Get upcoming events
     upcoming_events = await db.events.find({"published": True}, {"_id": 0}).sort("event_date", 1).limit(3).to_list(3)
-    
+
     # Get latest editions
     latest_editions = await db.editions.find({"published": True}, {"_id": 0}).sort("edition_number", -1).limit(10).to_list(10)
-    
+
     # Convert datetime strings
     for post in latest_posts:
         if isinstance(post.get('created_at'), str):
@@ -1505,13 +1415,13 @@ async def get_home_data():
             post['updated_at'] = datetime.fromisoformat(post['updated_at'])
 
     latest_posts = dedupe_posts(latest_posts)
-    
+
     for column in latest_columns:
         if isinstance(column.get('created_at'), str):
             column['created_at'] = datetime.fromisoformat(column['created_at'])
         if isinstance(column.get('updated_at'), str):
             column['updated_at'] = datetime.fromisoformat(column['updated_at'])
-    
+
     for event in upcoming_events:
         if isinstance(event.get('created_at'), str):
             event['created_at'] = datetime.fromisoformat(event['created_at'])
@@ -1519,7 +1429,7 @@ async def get_home_data():
             event['updated_at'] = datetime.fromisoformat(event['updated_at'])
         if isinstance(event.get('event_date'), str):
             event['event_date'] = datetime.fromisoformat(event['event_date'])
-    
+
     for edition in latest_editions:
         if isinstance(edition.get('created_at'), str):
             edition['created_at'] = datetime.fromisoformat(edition['created_at'])
