@@ -142,6 +142,11 @@ async def startup_db_client():
     await db.columns.create_index([("columnist_id", pymongo.ASCENDING)])
 
     try:
+        await db.columnists.create_index([("slug", pymongo.ASCENDING)], unique=True)
+    except Exception:
+        await db.columnists.create_index([("slug", pymongo.ASCENDING)])
+
+    try:
         await db.events.create_index([("slug", pymongo.ASCENDING)], unique=True)
     except Exception:
         await db.events.create_index([("slug", pymongo.ASCENDING)])
@@ -325,6 +330,23 @@ async def get_current_user(
 
 def create_slug(title: str) -> str:
     return slugify(title)
+
+async def create_unique_slug(collection, title: str, current_id: Optional[str] = None) -> str:
+    base_slug = create_slug(title) or str(uuid.uuid4())
+    slug = base_slug
+    suffix = 2
+
+    while True:
+        query = {"slug": slug}
+        if current_id:
+            query["id"] = {"$ne": current_id}
+
+        existing = await collection.find_one(query, {"_id": 0, "id": 1})
+        if not existing:
+            return slug
+
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
 
 def is_blob_url(value: Optional[str]) -> bool:
     if not value:
@@ -570,6 +592,7 @@ def hydrate_column_with_columnist(column: Optional[dict], columnist: Optional[di
         return column
 
     column["columnist_id"] = columnist.get("id")
+    column["columnist_slug"] = columnist.get("slug")
     column["author_name"] = columnist.get("name") or column.get("author_name")
     column["author_role"] = columnist.get("role") or column.get("author_role")
     column["author_bio"] = columnist.get("bio") or column.get("author_bio")
@@ -591,6 +614,21 @@ async def get_columnists_map(columnist_ids: List[str]) -> dict:
         for columnist in columnists
     ]
     return {columnist["id"]: columnist for columnist in serialized_columnists}
+
+async def ensure_columnist_slug(columnist: Optional[dict]) -> Optional[dict]:
+    if not columnist:
+        return columnist
+
+    if columnist.get("slug"):
+        return columnist
+
+    next_slug = await create_unique_slug(db.columnists, columnist.get("name") or columnist.get("id") or "colunista", columnist.get("id"))
+    await db.columnists.update_one({"id": columnist["id"]}, {"$set": {"slug": next_slug}})
+    columnist["slug"] = next_slug
+    return columnist
+
+async def ensure_columnist_slugs(columnists: List[dict]) -> List[dict]:
+    return [await ensure_columnist_slug(columnist) for columnist in columnists]
 
 async def apply_columnist_to_column_payload(column_dict: dict) -> dict:
     columnist_id = column_dict.get("columnist_id")
@@ -815,9 +853,11 @@ async def delete_post(post_id: str, current_user: User = Depends(get_current_use
 
 @api_router.get("/home-highlights")
 async def get_home_highlights():
+    post_card_projection = {"_id": 0, "content": 0}
+
     featured_candidates = await db.posts.find(
         {"published": True, "destaque_principal_home": True},
-        {"_id": 0}
+        post_card_projection
     ).sort([("updated_at", -1), ("created_at", -1)]).to_list(10)
 
     featured_candidates = dedupe_posts([normalize_post_datetimes(post) for post in featured_candidates])
@@ -826,7 +866,7 @@ async def get_home_highlights():
 
     secondary_posts = await db.posts.find(
         {"published": True, "destaque_secundario_home": True},
-        {"_id": 0}
+        post_card_projection
     ).to_list(50)
 
     secondary_posts = [
@@ -846,10 +886,17 @@ async def get_home_highlights():
 # ============ COLUMNS ROUTES (Colunas) ============
 
 @api_router.get("/columns", response_model=List[Column])
-async def get_columns(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
+async def get_columns(
+    limit: int = 100,
+    skip: int = 0,
+    published: Optional[bool] = None,
+    columnist_id: Optional[str] = None
+):
     query = {}
     if published is not None:
         query['published'] = published
+    if columnist_id:
+        query['columnist_id'] = columnist_id
 
     columns = await db.columns.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     columnists_map = await get_columnists_map([column.get("columnist_id") for column in columns])
@@ -1156,7 +1203,21 @@ async def get_columnists(limit: int = 100, skip: int = 0):
         .limit(limit)
         .to_list(limit)
     )
+    columnists = await ensure_columnist_slugs(columnists)
     return [serialize_datetimes(columnist, "created_at", "updated_at") for columnist in columnists]
+
+@api_router.get("/columnists/slug/{slug}", response_model=Columnist)
+async def get_columnist_by_slug(slug: str):
+    columnist = await db.columnists.find_one({"slug": slug}, {"_id": 0})
+    if not columnist:
+        legacy_candidates = await db.columnists.find({}, {"_id": 0}).to_list(200)
+        legacy_candidates = await ensure_columnist_slugs(legacy_candidates)
+        columnist = next((candidate for candidate in legacy_candidates if candidate.get("slug") == slug), None)
+
+    if not columnist:
+        raise HTTPException(status_code=404, detail="Columnist not found")
+
+    return serialize_datetimes(columnist, "created_at", "updated_at")
 
 @api_router.get("/columnists/{columnist_id}", response_model=Columnist)
 async def get_columnist(columnist_id: str):
@@ -1164,11 +1225,14 @@ async def get_columnist(columnist_id: str):
     if not columnist:
         raise HTTPException(status_code=404, detail="Columnist not found")
 
+    columnist = await ensure_columnist_slug(columnist)
     return serialize_datetimes(columnist, "created_at", "updated_at")
 
 @api_router.post("/columnists", response_model=Columnist)
 async def create_columnist(columnist_data: ColumnistCreate, current_user: User = Depends(get_current_user)):
-    columnist_obj = Columnist(**columnist_data.model_dump())
+    columnist_dict = columnist_data.model_dump()
+    columnist_dict["slug"] = await create_unique_slug(db.columnists, columnist_dict.get("name", "colunista"))
+    columnist_obj = Columnist(**columnist_dict)
     doc = columnist_obj.model_dump()
     doc["created_at"] = doc["created_at"].isoformat()
     doc["updated_at"] = doc["updated_at"].isoformat()
@@ -1183,6 +1247,7 @@ async def update_columnist(columnist_id: str, columnist_data: ColumnistCreate, c
         raise HTTPException(status_code=404, detail="Columnist not found")
 
     payload = columnist_data.model_dump()
+    payload["slug"] = await create_unique_slug(db.columnists, payload.get("name", "colunista"), columnist_id)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     await db.columnists.update_one({"id": columnist_id}, {"$set": payload})
@@ -1393,13 +1458,20 @@ async def get_media_file(filename: str):
 
 @api_router.get("/home")
 async def get_home_data():
+    post_card_projection = {"_id": 0, "content": 0}
+    column_card_projection = {"_id": 0, "content": 0}
+
     settings = await db.home_settings.find_one({"id": "home-page"}, {"_id": 0})
 
     # Get latest post
-    latest_posts = await db.posts.find({"published": True}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    latest_posts = await db.posts.find({"published": True}, post_card_projection).sort("created_at", -1).to_list(80)
 
     # Get latest columns
-    latest_columns = await db.columns.find({"published": True}, {"_id": 0}).sort("created_at", -1).limit(12).to_list(12)
+    latest_columns = await db.columns.find({"published": True}, column_card_projection).sort("created_at", -1).limit(12).to_list(12)
+
+    # Get registered columnists for the public columnists shelf
+    home_columnists = await db.columnists.find({}, {"_id": 0}).sort([("name", 1), ("created_at", -1)]).limit(24).to_list(24)
+    home_columnists = await ensure_columnist_slugs(home_columnists)
 
     # Get upcoming events
     upcoming_events = await db.events.find({"published": True}, {"_id": 0}).sort("event_date", 1).limit(3).to_list(3)
@@ -1446,7 +1518,7 @@ async def get_home_data():
 
     highlighted_featured_candidates = await db.posts.find(
         {"published": True, "destaque_principal_home": True},
-        {"_id": 0}
+        post_card_projection
     ).sort([("updated_at", -1), ("created_at", -1)]).to_list(10)
     highlighted_featured_candidates = dedupe_posts(
         [normalize_post_datetimes(post) for post in highlighted_featured_candidates]
@@ -1457,7 +1529,7 @@ async def get_home_data():
     if featured_post_id:
         selected_featured_post = await db.posts.find_one(
             {"id": featured_post_id, "published": True},
-            {"_id": 0}
+            post_card_projection
         )
         selected_featured_post = normalize_post_datetimes(selected_featured_post)
 
@@ -1470,7 +1542,7 @@ async def get_home_data():
 
     highlighted_secondary_posts = await db.posts.find(
         {"published": True, "destaque_secundario_home": True},
-        {"_id": 0}
+        post_card_projection
     ).to_list(50)
     highlighted_secondary_posts = [
         post
@@ -1600,6 +1672,7 @@ async def get_home_data():
         "recent_posts": recent_posts[:3],
         "recommended_posts": recommended_posts[:3],
         "columns": ordered_columns,
+        "columnists": [serialize_datetimes(columnist, "created_at", "updated_at") for columnist in home_columnists],
         "events": upcoming_events,
         "featured_edition": featured_edition,
         "editions": ordered_editions

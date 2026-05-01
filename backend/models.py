@@ -186,6 +186,7 @@ class ColumnistBase(BaseModel):
     role: str
     bio: str
     image: Optional[str] = None
+    slug: Optional[str] = None
 
 class ColumnistCreate(ColumnistBase):
     pass
@@ -202,6 +203,7 @@ class AboutValueItem(BaseModel):
 
 class AboutSocialLinks(BaseModel):
     instagram: Optional[str] = None
+    whatsapp: Optional[str] = None
     facebook: Optional[str] = None
     linkedin: Optional[str] = None
 
