@@ -907,6 +907,29 @@ async def get_columns(
 
     return columns
 
+@api_router.get("/columns/by-columnist/{columnist_id}")
+async def get_columns_by_columnist(
+    columnist_id: str,
+    limit: int = 24,
+    skip: int = 0,
+    published: Optional[bool] = True
+):
+    query = {"columnist_id": columnist_id}
+    if published is not None:
+        query["published"] = published
+
+    columns = await db.columns.find(
+        query,
+        {"_id": 0, "content": 0}
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    columnists_map = await get_columnists_map([column.get("columnist_id") for column in columns])
+
+    for column in columns:
+        serialize_datetimes(column, "created_at", "updated_at")
+        hydrate_column_with_columnist(column, columnists_map.get(column.get("columnist_id")))
+
+    return columns
+
 @api_router.get("/columns/{slug}", response_model=Column)
 async def get_column(slug: str):
     column = await db.columns.find_one({"slug": slug}, {"_id": 0})
