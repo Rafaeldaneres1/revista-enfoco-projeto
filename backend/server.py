@@ -25,7 +25,7 @@ from slugify import slugify
 from io import BytesIO
 from collections import defaultdict, deque
 from xml.etree import ElementTree
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 import cloudinary
 import cloudinary.uploader
 from vercel.blob import put_async
@@ -113,6 +113,33 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+class PublicCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        if request.method != "GET" or response.status_code >= 400:
+            return response
+
+        path = request.url.path
+        if path.startswith("/uploads/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        elif path in {"/api/home", "/api/home-lite"}:
+            response.headers.setdefault("Cache-Control", "public, max-age=90, stale-while-revalidate=300")
+        elif path == "/api/home-settings":
+            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
+        elif (
+            path == "/api/posts"
+            or path.startswith("/api/posts/")
+            or path == "/api/columns"
+            or path.startswith("/api/columns/")
+            or path == "/api/columnists"
+            or path.startswith("/api/columnists/")
+        ):
+            response.headers.setdefault("Cache-Control", "public, max-age=120, stale-while-revalidate=300")
+
+        return response
+
+app.add_middleware(PublicCacheMiddleware)
 
 raw_hosts = os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1")
 allowed_hosts = [h.strip() for h in raw_hosts.split(",") if h.strip()]
@@ -262,6 +289,31 @@ def validate_and_prepare_image_upload(file: UploadFile, file_bytes: bytes, file_
             image.verify()
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image")
+
+def optimize_public_image_upload(file_bytes: bytes, file_extension: str, content_type: str) -> tuple[bytes, str, str]:
+    normalized_extension = file_extension.lower()
+    normalized_content_type = (content_type or "").lower()
+    if normalized_extension in {".svg", ".gif"} or normalized_content_type in {"image/svg+xml", "image/gif"}:
+        return file_bytes, file_extension, content_type
+
+    try:
+        with Image.open(BytesIO(file_bytes)) as image:
+            image = ImageOps.exif_transpose(image)
+            if max(image.size) > 2200:
+                image.thumbnail((2200, 2200), Image.Resampling.LANCZOS)
+
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+
+            output = BytesIO()
+            image.save(output, format="WEBP", quality=84, method=6)
+            optimized_bytes = output.getvalue()
+            if len(optimized_bytes) < len(file_bytes):
+                return optimized_bytes, ".webp", "image/webp"
+    except Exception as error:
+        logging.warning("Image optimization skipped: %s", error)
+
+    return file_bytes, file_extension, content_type
 
 def create_access_token(data: dict):
     to_encode = data.copy()
@@ -1424,12 +1476,17 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
 
         file_bytes = await file.read()
         validate_and_prepare_image_upload(file, file_bytes, file_extension)
+        file_bytes, file_extension, content_type = optimize_public_image_upload(
+            file_bytes,
+            file_extension,
+            content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream",
+        )
 
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         public_url = await persist_upload(
             unique_filename,
             file_bytes,
-            content_type=content_type or mimetypes.guess_type(file.filename or "")[0] or None,
+            content_type=content_type or None,
         )
 
         media_obj = Media(
@@ -1478,6 +1535,200 @@ async def get_media_file(filename: str):
     return FileResponse(file_path)
 
 # ============ HOME/DASHBOARD ROUTE ============
+
+def trim_text(value: Optional[str], max_length: int = 220) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= max_length:
+        return text
+    return text[:max_length].rsplit(" ", 1)[0].strip() + "..."
+
+def compact_post_card(post: Optional[dict]) -> Optional[dict]:
+    if not post:
+        return None
+    return {
+        "id": post.get("id"),
+        "slug": post.get("slug"),
+        "title": post.get("title"),
+        "excerpt": trim_text(post.get("excerpt")),
+        "category": post.get("category"),
+        "category_id": post.get("category_id"),
+        "category_slug": post.get("category_slug"),
+        "featured_image": post.get("featured_image"),
+        "image_position": post.get("image_position"),
+        "author_name": post.get("author_name"),
+        "author_image": post.get("author_image"),
+        "created_at": post.get("created_at"),
+        "updated_at": post.get("updated_at"),
+    }
+
+def compact_columnist_card(columnist: dict) -> dict:
+    return {
+        "id": columnist.get("id"),
+        "slug": columnist.get("slug"),
+        "name": columnist.get("name"),
+        "role": columnist.get("role"),
+        "bio": trim_text(columnist.get("bio"), 180),
+        "image": columnist.get("image"),
+        "created_at": columnist.get("created_at"),
+        "updated_at": columnist.get("updated_at"),
+    }
+
+def compact_edition_card(edition: Optional[dict], preview_limit: int = 2) -> Optional[dict]:
+    if not edition:
+        return None
+    preview_pages = edition.get("preview_pages") or []
+    return {
+        "id": edition.get("id"),
+        "slug": edition.get("slug"),
+        "title": edition.get("title"),
+        "description": trim_text(edition.get("description"), 260),
+        "cover_image": edition.get("cover_image"),
+        "edition_number": edition.get("edition_number"),
+        "pdf_url": edition.get("pdf_url"),
+        "page_count": edition.get("page_count"),
+        "preview_pages": preview_pages[:preview_limit],
+        "created_at": edition.get("created_at"),
+        "updated_at": edition.get("updated_at"),
+    }
+
+async def build_home_post_groups(settings: Optional[dict], latest_posts_limit: int = 40) -> tuple[Optional[dict], List[dict], List[dict]]:
+    post_card_projection = {"_id": 0, "content": 0}
+    latest_posts = await db.posts.find(
+        {"published": True},
+        post_card_projection
+    ).sort("created_at", -1).to_list(latest_posts_limit)
+    latest_posts = dedupe_posts([normalize_post_datetimes(post) for post in latest_posts])
+
+    featured_post_id = settings.get("hero_featured_post_id") if settings else None
+    selected_post_ids = settings.get("selected_post_ids", []) if settings else []
+
+    highlighted_featured_candidates = await db.posts.find(
+        {"published": True, "destaque_principal_home": True},
+        post_card_projection
+    ).sort([("updated_at", -1), ("created_at", -1)]).to_list(5)
+    highlighted_featured_candidates = dedupe_posts(
+        [normalize_post_datetimes(post) for post in highlighted_featured_candidates]
+    )
+    highlighted_featured_post = highlighted_featured_candidates[0] if highlighted_featured_candidates else None
+
+    selected_featured_post = None
+    if featured_post_id:
+        selected_featured_post = await db.posts.find_one(
+            {"id": featured_post_id, "published": True},
+            post_card_projection
+        )
+        selected_featured_post = normalize_post_datetimes(selected_featured_post)
+
+    featured_post = highlighted_featured_post or selected_featured_post
+    if not featured_post and latest_posts:
+        featured_post = latest_posts[0].copy()
+
+    recent_posts = []
+    used_post_keys = {get_post_identity(featured_post)} if featured_post else set()
+
+    highlighted_secondary_posts = await db.posts.find(
+        {"published": True, "destaque_secundario_home": True},
+        post_card_projection
+    ).to_list(20)
+    highlighted_secondary_posts = [
+        post
+        for post in dedupe_posts(
+            [normalize_post_datetimes(post) for post in sort_highlighted_posts(highlighted_secondary_posts)]
+        )
+        if get_post_identity(post) not in used_post_keys
+    ]
+
+    for post in highlighted_secondary_posts:
+        recent_posts.append(post)
+        used_post_keys.add(get_post_identity(post))
+        if len(recent_posts) >= 3:
+            break
+
+    if len(recent_posts) < 3:
+        for post_id in selected_post_ids:
+            selected_post = next(
+                (
+                    post.copy()
+                    for post in latest_posts
+                    if post["id"] == post_id and get_post_identity(post) not in used_post_keys
+                ),
+                None
+            )
+            if selected_post:
+                recent_posts.append(selected_post)
+                used_post_keys.add(get_post_identity(selected_post))
+            if len(recent_posts) >= 3:
+                break
+
+    if len(recent_posts) < 3:
+        for post in latest_posts:
+            if get_post_identity(post) in used_post_keys:
+                continue
+            recent_posts.append(post.copy())
+            used_post_keys.add(get_post_identity(post))
+            if len(recent_posts) >= 3:
+                break
+
+    recommended_posts = []
+    recommended_used_keys = {get_post_identity(featured_post)} if featured_post else set()
+    recommended_used_keys.update(get_post_identity(post) for post in recent_posts)
+
+    for post in latest_posts:
+        if get_post_identity(post) in recommended_used_keys:
+            continue
+        recommended_posts.append(post.copy())
+        recommended_used_keys.add(get_post_identity(post))
+        if len(recommended_posts) >= 3:
+            break
+
+    if not recommended_posts:
+        recommended_posts = [post.copy() for post in recent_posts]
+
+    hero_override_image = settings.get("hero_override_image") if settings else None
+    if featured_post and hero_override_image:
+        featured_post["featured_image"] = hero_override_image
+
+    return featured_post, recent_posts[:3], recommended_posts[:3]
+
+@api_router.get("/home-lite")
+async def get_home_lite_data():
+    settings = await db.home_settings.find_one({"id": "home-page"}, {"_id": 0})
+    featured_post, recent_posts, recommended_posts = await build_home_post_groups(settings, latest_posts_limit=24)
+
+    latest_editions = await db.editions.find(
+        {"published": True},
+        {"_id": 0, "reader_pages": 0, "pages_base_path": 0}
+    ).sort("edition_number", -1).limit(4).to_list(4)
+    for edition in latest_editions:
+        serialize_datetimes(edition, "created_at", "updated_at")
+
+    featured_edition_id = settings.get("featured_edition_id") if settings else None
+    featured_edition_override_image = settings.get("featured_edition_override_image") if settings else None
+    featured_edition = next((edition.copy() for edition in latest_editions if edition["id"] == featured_edition_id), None)
+    if not featured_edition and latest_editions:
+        featured_edition = latest_editions[0].copy()
+    if featured_edition and featured_edition_override_image:
+        featured_edition["cover_image"] = featured_edition_override_image
+
+    home_columnists = await db.columnists.find(
+        {},
+        {"_id": 0, "name": 1, "role": 1, "bio": 1, "image": 1, "slug": 1, "id": 1, "created_at": 1, "updated_at": 1}
+    ).sort([("name", 1), ("created_at", -1)]).limit(8).to_list(8)
+    home_columnists = await ensure_columnist_slugs(home_columnists)
+
+    return {
+        "featured_post": compact_post_card(featured_post),
+        "recent_posts": [compact_post_card(post) for post in recent_posts],
+        "recommended_posts": [compact_post_card(post) for post in recommended_posts],
+        "columns": [],
+        "columnists": [
+            compact_columnist_card(serialize_datetimes(columnist, "created_at", "updated_at"))
+            for columnist in home_columnists
+        ],
+        "events": [],
+        "featured_edition": compact_edition_card(featured_edition),
+        "editions": [compact_edition_card(edition) for edition in latest_editions],
+    }
 
 @api_router.get("/home")
 async def get_home_data():
