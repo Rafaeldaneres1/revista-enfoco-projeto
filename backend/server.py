@@ -120,6 +120,15 @@ class PublicCacheMiddleware(BaseHTTPMiddleware):
         if request.method != "GET" or response.status_code >= 400:
             return response
 
+        request_cache_control = request.headers.get("Cache-Control", "").lower()
+        has_admin_context = bool(request.headers.get("Authorization") or request.headers.get("Cookie"))
+        asks_for_fresh_data = "no-cache" in request_cache_control or "no-store" in request_cache_control
+
+        if has_admin_context or asks_for_fresh_data:
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+            return response
+
         path = request.url.path
         if path.startswith("/uploads/"):
             response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
@@ -299,14 +308,14 @@ def optimize_public_image_upload(file_bytes: bytes, file_extension: str, content
     try:
         with Image.open(BytesIO(file_bytes)) as image:
             image = ImageOps.exif_transpose(image)
-            if max(image.size) > 2200:
-                image.thumbnail((2200, 2200), Image.Resampling.LANCZOS)
+            if max(image.size) > 3200:
+                image.thumbnail((3200, 3200), Image.Resampling.LANCZOS)
 
             if image.mode not in ("RGB", "RGBA"):
                 image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
 
             output = BytesIO()
-            image.save(output, format="WEBP", quality=84, method=6)
+            image.save(output, format="WEBP", quality=95, method=6)
             optimized_bytes = output.getvalue()
             if len(optimized_bytes) < len(file_bytes):
                 return optimized_bytes, ".webp", "image/webp"
@@ -827,7 +836,7 @@ async def logout(request: Request, response: Response):
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
-# ============ POSTS ROUTES (Notícias) ============
+# ============ POSTS ROUTES (Reportagens) ============
 
 @api_router.get("/posts", response_model=List[Post])
 async def get_posts(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
@@ -1561,6 +1570,25 @@ def compact_post_card(post: Optional[dict]) -> Optional[dict]:
         "updated_at": post.get("updated_at"),
     }
 
+def compact_column_card(column: Optional[dict]) -> Optional[dict]:
+    if not column:
+        return None
+    return {
+        "id": column.get("id"),
+        "slug": column.get("slug"),
+        "title": column.get("title"),
+        "excerpt": trim_text(column.get("excerpt") or column.get("author_bio")),
+        "featured_image": column.get("featured_image"),
+        "image_position": column.get("image_position"),
+        "author_name": column.get("author_name"),
+        "author_role": column.get("author_role"),
+        "author_image": column.get("author_image"),
+        "columnist_id": column.get("columnist_id"),
+        "columnist_slug": column.get("columnist_slug"),
+        "created_at": column.get("created_at"),
+        "updated_at": column.get("updated_at"),
+    }
+
 def compact_columnist_card(columnist: dict) -> dict:
     return {
         "id": columnist.get("id"),
@@ -1584,6 +1612,7 @@ def compact_edition_card(edition: Optional[dict], preview_limit: int = 2) -> Opt
         "description": trim_text(edition.get("description"), 260),
         "cover_image": edition.get("cover_image"),
         "edition_number": edition.get("edition_number"),
+        "heyzine_url": edition.get("heyzine_url"),
         "pdf_url": edition.get("pdf_url"),
         "page_count": edition.get("page_count"),
         "preview_pages": preview_pages[:preview_limit],
@@ -1690,10 +1719,103 @@ async def build_home_post_groups(settings: Optional[dict], latest_posts_limit: i
 
     return featured_post, recent_posts[:3], recommended_posts[:3]
 
+async def build_home_hero_posts(settings: Optional[dict] = None, limit: int = 12) -> List[dict]:
+    post_card_projection = {"_id": 0, "content": 0}
+    hero_posts = await db.posts.find(
+        {"published": True},
+        post_card_projection
+    ).sort("created_at", -1).limit(limit).to_list(limit)
+    hero_posts = dedupe_posts([normalize_post_datetimes(post) for post in hero_posts])
+    hero_posts = await hydrate_posts_with_team_members(hero_posts)
+    hero_override_image = settings.get("hero_override_image") if settings else None
+    if hero_posts and hero_override_image:
+        hero_posts[0]["featured_image"] = hero_override_image
+    return hero_posts[:limit]
+
+async def build_home_columns(settings: Optional[dict], latest_columns_limit: Optional[int] = None) -> List[dict]:
+    column_card_projection = {"_id": 0, "content": 0}
+    home_column_items = settings.get("home_columns", []) if settings else []
+    selected_column_ids = [
+        item.get("column_id")
+        for item in home_column_items
+        if item.get("column_id")
+    ]
+
+    latest_columns_cursor = db.columns.find(
+        {"published": True},
+        column_card_projection
+    ).sort("created_at", -1)
+
+    if latest_columns_limit:
+        latest_columns_cursor = latest_columns_cursor.limit(latest_columns_limit)
+
+    latest_columns = await latest_columns_cursor.to_list(latest_columns_limit)
+
+    selected_columns = []
+    if selected_column_ids:
+        selected_columns = await db.columns.find(
+            {"published": True, "id": {"$in": selected_column_ids}},
+            column_card_projection
+        ).to_list(len(selected_column_ids))
+
+    columns_by_id = {
+        column.get("id"): normalize_post_datetimes(column)
+        for column in [*latest_columns, *selected_columns]
+        if column.get("id")
+    }
+
+    columnists_map = await get_columnists_map([
+        column.get("columnist_id")
+        for column in columns_by_id.values()
+        if column.get("columnist_id")
+    ])
+
+    for column in columns_by_id.values():
+        hydrate_column_with_columnist(column, columnists_map.get(column.get("columnist_id")))
+
+    overrides_by_id = {
+        item.get("column_id"): item
+        for item in home_column_items
+        if item.get("column_id")
+    }
+
+    ordered_columns = []
+    used_column_ids = set()
+
+    for column_item in home_column_items:
+        column_id = column_item.get("column_id")
+        selected_column = columns_by_id.get(column_id)
+        if not selected_column or column_id in used_column_ids:
+            continue
+
+        selected_column = selected_column.copy()
+        if column_item.get("override_image"):
+            selected_column["featured_image"] = column_item["override_image"]
+
+        ordered_columns.append(selected_column)
+        used_column_ids.add(column_id)
+
+    for column in latest_columns:
+        column_id = column.get("id")
+        if not column_id or column_id in used_column_ids:
+            continue
+
+        selected_column = columns_by_id.get(column_id, column).copy()
+        override_item = overrides_by_id.get(column_id)
+        if override_item and override_item.get("override_image"):
+            selected_column["featured_image"] = override_item["override_image"]
+
+        ordered_columns.append(selected_column)
+        used_column_ids.add(column_id)
+
+    return ordered_columns
+
 @api_router.get("/home-lite")
 async def get_home_lite_data():
     settings = await db.home_settings.find_one({"id": "home-page"}, {"_id": 0})
     featured_post, recent_posts, recommended_posts = await build_home_post_groups(settings, latest_posts_limit=24)
+    hero_posts = await build_home_hero_posts(settings)
+    highlighted_columns = await build_home_columns(settings)
 
     latest_editions = await db.editions.find(
         {"published": True},
@@ -1717,10 +1839,11 @@ async def get_home_lite_data():
     home_columnists = await ensure_columnist_slugs(home_columnists)
 
     return {
+        "hero_posts": [compact_post_card(post) for post in hero_posts],
         "featured_post": compact_post_card(featured_post),
         "recent_posts": [compact_post_card(post) for post in recent_posts],
         "recommended_posts": [compact_post_card(post) for post in recommended_posts],
-        "columns": [],
+        "columns": [compact_column_card(column) for column in highlighted_columns],
         "columnists": [
             compact_columnist_card(serialize_datetimes(columnist, "created_at", "updated_at"))
             for columnist in home_columnists
@@ -1906,42 +2029,11 @@ async def get_home_data():
             if len(ordered_editions) >= 6:
                 break
 
-    column_overrides = {
-        item.get("column_id"): item
-        for item in home_column_items
-        if item.get("column_id")
-    }
-
-    ordered_columns = []
-    used_column_ids = set()
-
-    for column_item in home_column_items:
-        column_id = column_item.get("column_id")
-        if not column_id or column_id in used_column_ids:
-            continue
-
-        selected_column = next((column.copy() for column in latest_columns if column["id"] == column_id), None)
-        if not selected_column:
-            continue
-
-        if column_item.get("override_image"):
-            selected_column["featured_image"] = column_item["override_image"]
-
-        ordered_columns.append(selected_column)
-        used_column_ids.add(column_id)
-
-    for column in latest_columns:
-        if column["id"] in used_column_ids:
-            continue
-
-        selected_column = column.copy()
-        override_item = column_overrides.get(column["id"])
-        if override_item and override_item.get("override_image"):
-            selected_column["featured_image"] = override_item["override_image"]
-
-        ordered_columns.append(selected_column)
+    ordered_columns = await build_home_columns(settings)
+    hero_posts = await build_home_hero_posts(settings)
 
     return {
+        "hero_posts": hero_posts,
         "featured_post": featured_post,
         "recent_posts": recent_posts[:3],
         "recommended_posts": recommended_posts[:3],
