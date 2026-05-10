@@ -136,6 +136,8 @@ class PublicCacheMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Cache-Control", "public, max-age=90, stale-while-revalidate=300")
         elif path == "/api/home-settings":
             response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
+        elif path == "/api/banners":
+            response.headers.setdefault("Cache-Control", "public, max-age=120, stale-while-revalidate=300")
         elif (
             path == "/api/posts"
             or path.startswith("/api/posts/")
@@ -191,6 +193,10 @@ async def startup_db_client():
         await db.editions.create_index([("slug", pymongo.ASCENDING)], unique=True)
     except Exception:
         await db.editions.create_index([("slug", pymongo.ASCENDING)])
+
+    await db.banners.create_index([("active", pymongo.ASCENDING)])
+    await db.banners.create_index([("positions", pymongo.ASCENDING)])
+    await db.banners.create_index([("display_order", pymongo.ASCENDING)])
 
     try:
         await db.users.create_index([("email", pymongo.ASCENDING)], unique=True)
@@ -1274,6 +1280,74 @@ async def delete_category(category_id: str, current_user: User = Depends(get_cur
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"message": "Category deleted successfully"}
+
+# ============ BANNER ROUTES (Publicidade) ============
+
+def normalize_banner_datetimes(banner: dict) -> dict:
+    return serialize_datetimes(banner, "created_at", "updated_at")
+
+@api_router.get("/banners", response_model=List[Banner])
+async def get_public_banners(position: Optional[str] = None):
+    query = {"active": True}
+    if position:
+        query["positions"] = position
+
+    banners = await db.banners.find(query, {"_id": 0}).sort([
+        ("display_order", 1),
+        ("created_at", -1)
+    ]).to_list(50)
+    return [normalize_banner_datetimes(banner) for banner in banners]
+
+@api_router.get("/admin/banners", response_model=List[Banner])
+async def get_admin_banners(current_user: User = Depends(get_current_user)):
+    banners = await db.banners.find({}, {"_id": 0}).sort([
+        ("display_order", 1),
+        ("created_at", -1)
+    ]).to_list(200)
+    return [normalize_banner_datetimes(banner) for banner in banners]
+
+@api_router.get("/admin/banners/{banner_id}", response_model=Banner)
+async def get_admin_banner(banner_id: str, current_user: User = Depends(get_current_user)):
+    banner = await db.banners.find_one({"id": banner_id}, {"_id": 0})
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return normalize_banner_datetimes(banner)
+
+@api_router.post("/admin/banners", response_model=Banner)
+async def create_banner(banner_data: BannerCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    banner_obj = Banner(**banner_data.model_dump())
+    doc = banner_obj.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    doc["updated_at"] = doc["updated_at"].isoformat()
+    await db.banners.insert_one(doc)
+    return banner_obj
+
+@api_router.put("/admin/banners/{banner_id}", response_model=Banner)
+async def update_banner(
+    banner_id: str,
+    banner_data: BannerCreate,
+    current_user: User = Depends(get_current_user)
+):
+    ensure_admin(current_user)
+    existing_banner = await db.banners.find_one({"id": banner_id}, {"_id": 0})
+    if not existing_banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+
+    banner_dict = banner_data.model_dump()
+    banner_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.banners.update_one({"id": banner_id}, {"$set": banner_dict})
+    updated_banner = await db.banners.find_one({"id": banner_id}, {"_id": 0})
+    return normalize_banner_datetimes(updated_banner)
+
+@api_router.delete("/admin/banners/{banner_id}")
+async def delete_banner(banner_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    result = await db.banners.delete_one({"id": banner_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Banner not found")
+
+    return {"message": "Banner deleted successfully"}
 
 # ============ COLUMNISTS ROUTES (Colunistas) ============
 

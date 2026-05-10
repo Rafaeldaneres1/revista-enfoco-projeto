@@ -30,7 +30,7 @@ class Token(BaseModel):
     token_type: str
     user: User
 
-# Post Models (Notícias)
+# Post Models (Reportagens)
 class PostBase(BaseModel):
     title: str
     content: str
@@ -111,6 +111,7 @@ class EditionBase(BaseModel):
     description: str
     cover_image: Optional[str] = None
     edition_number: int
+    heyzine_url: Optional[str] = None
     pdf_url: Optional[str] = None
     page_count: Optional[int] = None
     pages_base_path: Optional[str] = None
@@ -243,7 +244,7 @@ class HomeSettingsBase(BaseModel):
     hero_override_image: Optional[str] = None
     featured_edition_override_image: Optional[str] = None
     hero_primary_cta_label: str = "Ler Matéria"
-    hero_secondary_cta_label: str = "Mais notícias"
+    hero_secondary_cta_label: str = "Mais reportagens"
     hero_secondary_label: str = "Também em Destaque"
     featured_edition_label: str = "Em Destaque"
     featured_edition_title: str = "Edição Atual"
@@ -253,7 +254,7 @@ class HomeSettingsBase(BaseModel):
     recommended_title_prefix: str = "Artigos em"
     recommended_title_emphasis: str = "Destaque"
     recommended_link_label: str = "Ver Todos"
-    recommended_empty_message: str = "As chamadas editoriais da home serão exibidas aqui assim que as primeiras notícias forem cadastradas no backend."
+    recommended_empty_message: str = "As chamadas editoriais da home serão exibidas aqui assim que as primeiras reportagens forem cadastradas no backend."
     archive_label: str = "Acervo da Revista"
     archive_title: str = "Edições para navegar"
     archive_description: str = "Clique na capa para abrir o PDF e use as setas para navegar pelo acervo ou pelas páginas de prévia."
@@ -262,10 +263,10 @@ class HomeSettingsBase(BaseModel):
     archive_empty_message: str = "As edições da revista serão exibidas aqui assim que forem cadastradas no backend."
 
     columns_label: str = "Colunas"
-    columns_title: str = "Vozes em destaque"
-    columns_description: str = "Textos autorais, leituras de contexto e pontos de vista que ampliam a experiÃªncia editorial da Revista Enfoco."
+    columns_title: str = "Colunas em destaque"
+    columns_description: str = "Opinioes, analises e leituras autorais selecionadas pela curadoria editorial da Revista Enfoco."
     columns_link_label: str = "Ver Colunas"
-    columns_empty_message: str = "As colunas publicadas aparecerÃ£o aqui assim que a curadoria editorial desta seÃ§Ã£o for preenchida."
+    columns_empty_message: str = "As colunas publicadas aparecerão aqui assim que a curadoria editorial desta seção for preenchida."
 
 class HomeSettingsUpdate(HomeSettingsBase):
     pass
@@ -273,6 +274,68 @@ class HomeSettingsUpdate(HomeSettingsBase):
 class HomeSettings(HomeSettingsBase):
     model_config = ConfigDict(extra="ignore")
     id: str = "home-page"
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# Banner Models
+BANNER_POSITION_VALUES = {
+    "home_after_highlights",
+    "home_before_editions",
+    "posts_after_filters",
+    "columns_after_hero",
+    "events_after_hero",
+    "editions_after_hero",
+    "article_middle",
+    "article_footer",
+}
+
+class BannerBase(BaseModel):
+    title: str
+    image: str
+    link_url: Optional[str] = None
+    active: bool = True
+    display_order: int = 0
+    positions: List[str] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Banner title is required")
+        return normalized
+
+    @field_validator("image")
+    @classmethod
+    def validate_image(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Banner image is required")
+        return normalized
+
+    @field_validator("link_url")
+    @classmethod
+    def normalize_link_url(cls, value: Optional[str]) -> Optional[str]:
+        normalized = (value or "").strip()
+        return normalized or None
+
+    @field_validator("positions")
+    @classmethod
+    def validate_positions(cls, value: List[str]) -> List[str]:
+        normalized = [item.strip() for item in value if item and item.strip()]
+        invalid = [item for item in normalized if item not in BANNER_POSITION_VALUES]
+        if invalid:
+            raise ValueError("Invalid banner position")
+        if not normalized:
+            raise ValueError("At least one banner position is required")
+        return list(dict.fromkeys(normalized))
+
+class BannerCreate(BannerBase):
+    pass
+
+class Banner(BannerBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Media Models
