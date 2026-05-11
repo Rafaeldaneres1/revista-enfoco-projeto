@@ -338,6 +338,93 @@ class Banner(BannerBase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+# Comment Models
+COMMENT_CONTENT_TYPES = {"post", "column"}
+COMMENT_STATUS_VALUES = {"pending", "approved", "rejected"}
+
+class CommentCreate(BaseModel):
+    content_type: str
+    content_slug: str
+    author_name: str
+    author_email: EmailStr
+    body: str
+    website: Optional[str] = None
+
+    @field_validator("content_type")
+    @classmethod
+    def validate_content_type(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in COMMENT_CONTENT_TYPES:
+            raise ValueError("Invalid comment content type")
+        return normalized
+
+    @field_validator("content_slug")
+    @classmethod
+    def validate_content_slug(cls, value: str) -> str:
+        normalized = (value or "").strip()
+        if not normalized:
+            raise ValueError("Content slug is required")
+        return normalized
+
+    @field_validator("author_name")
+    @classmethod
+    def validate_author_name(cls, value: str) -> str:
+        normalized = re.sub(r"\s+", " ", (value or "").strip())
+        if len(normalized) < 2:
+            raise ValueError("Name is required")
+        if len(normalized) > 80:
+            raise ValueError("Name is too long")
+        return normalized
+
+    @field_validator("body")
+    @classmethod
+    def validate_body(cls, value: str) -> str:
+        normalized = re.sub(r"\s+", " ", (value or "").strip())
+        if len(normalized) < 3:
+            raise ValueError("Comment is required")
+        if len(normalized) > 1200:
+            raise ValueError("Comment is too long")
+        return normalized
+
+class CommentStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in COMMENT_STATUS_VALUES:
+            raise ValueError("Invalid comment status")
+        return normalized
+
+class Comment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    content_type: str
+    content_id: Optional[str] = None
+    content_slug: str
+    content_title: Optional[str] = None
+    author_name: str
+    author_email: EmailStr
+    body: str
+    status: str = "pending"
+    client_key: Optional[str] = None
+    user_agent: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    approved_at: Optional[datetime] = None
+    rejected_at: Optional[datetime] = None
+    moderated_by: Optional[str] = None
+
+class PublicComment(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    content_type: str
+    content_slug: str
+    author_name: str
+    body: str
+    created_at: datetime
+
 # Media Models
 class Media(BaseModel):
     model_config = ConfigDict(extra="ignore")

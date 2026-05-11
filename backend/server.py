@@ -58,6 +58,8 @@ if USE_CLOUDINARY:
 MAX_IMAGE_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 LOGIN_RATE_LIMIT_ATTEMPTS = 5
 LOGIN_RATE_LIMIT_WINDOW = timedelta(minutes=15)
+COMMENT_RATE_LIMIT_ATTEMPTS = 4
+COMMENT_RATE_LIMIT_WINDOW = timedelta(minutes=10)
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg", ".bmp", ".tiff"}
 AUTH_COOKIE_NAME = "revista_enfoco_token"
 
@@ -138,6 +140,8 @@ class PublicCacheMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
         elif path == "/api/banners":
             response.headers.setdefault("Cache-Control", "public, max-age=120, stale-while-revalidate=300")
+        elif path == "/api/comments":
+            response.headers.setdefault("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
         elif (
             path == "/api/posts"
             or path.startswith("/api/posts/")
@@ -197,6 +201,13 @@ async def startup_db_client():
     await db.banners.create_index([("active", pymongo.ASCENDING)])
     await db.banners.create_index([("positions", pymongo.ASCENDING)])
     await db.banners.create_index([("display_order", pymongo.ASCENDING)])
+    await db.comments.create_index([
+        ("content_type", pymongo.ASCENDING),
+        ("content_slug", pymongo.ASCENDING),
+        ("status", pymongo.ASCENDING),
+        ("created_at", pymongo.DESCENDING)
+    ])
+    await db.comments.create_index([("status", pymongo.ASCENDING), ("created_at", pymongo.DESCENDING)])
 
     try:
         await db.users.create_index([("email", pymongo.ASCENDING)], unique=True)
@@ -205,6 +216,8 @@ async def startup_db_client():
     await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("key", unique=True)
     await db.login_attempts.create_index("expires_at", expireAfterSeconds=0)
+    await db.comment_attempts.create_index("key", unique=True)
+    await db.comment_attempts.create_index("expires_at", expireAfterSeconds=0)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -263,6 +276,63 @@ def get_request_client_key(request: Request, email: Optional[str] = None) -> str
     if not client_ip and request.client:
         client_ip = request.client.host
     return f"{client_ip or 'unknown'}:{(email or '').strip().lower()}"
+
+def sanitize_comment_text(value: str, *, min_length: int, max_length: int, field_name: str) -> str:
+    text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", value or "")
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if re.search(r"<\s*/?\s*[a-zA-Z][^>]*>", text):
+        raise HTTPException(status_code=400, detail=f"{field_name} cannot contain HTML")
+
+    text = text.replace("<", "").replace(">", "")
+    if len(text) < min_length:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    if len(text) > max_length:
+        raise HTTPException(status_code=400, detail=f"{field_name} is too long")
+    return text
+
+async def enforce_comment_rate_limit(client_key: str) -> None:
+    now = datetime.now(timezone.utc)
+    cutoff = now - COMMENT_RATE_LIMIT_WINDOW
+
+    doc = await db.comment_attempts.find_one({"key": client_key})
+    attempts = doc.get("attempts", []) if doc else []
+
+    valid_attempts = []
+    for attempt in attempts:
+        attempt_aware = attempt.replace(tzinfo=timezone.utc) if attempt.tzinfo is None else attempt
+        if attempt_aware >= cutoff:
+            valid_attempts.append(attempt_aware)
+
+    if len(valid_attempts) >= COMMENT_RATE_LIMIT_ATTEMPTS:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many comments sent. Please try again later."
+        )
+
+    valid_attempts.append(now)
+    expires_at = valid_attempts[0] + COMMENT_RATE_LIMIT_WINDOW
+    await db.comment_attempts.update_one(
+        {"key": client_key},
+        {"$set": {"attempts": valid_attempts, "expires_at": expires_at}},
+        upsert=True
+    )
+
+async def resolve_comment_content(content_type: str, content_slug: str) -> dict:
+    if content_type == "post":
+        collection = db.posts
+    elif content_type == "column":
+        collection = db.columns
+    else:
+        raise HTTPException(status_code=400, detail="Invalid comment content type")
+
+    content = await collection.find_one(
+        {"slug": content_slug, "published": True},
+        {"_id": 0, "id": 1, "slug": 1, "title": 1}
+    )
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+    return content
 
 def validate_and_prepare_image_upload(file: UploadFile, file_bytes: bytes, file_extension: str) -> None:
     if len(file_bytes) > MAX_IMAGE_UPLOAD_SIZE:
@@ -1280,6 +1350,141 @@ async def delete_category(category_id: str, current_user: User = Depends(get_cur
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
     return {"message": "Category deleted successfully"}
+
+# ============ COMMENT ROUTES (Moderacao) ============
+
+def normalize_comment_datetimes(comment: dict) -> dict:
+    return serialize_datetimes(
+        comment,
+        "created_at",
+        "updated_at",
+        "approved_at",
+        "rejected_at"
+    )
+
+@api_router.get("/comments", response_model=List[PublicComment])
+async def get_public_comments(content_type: str, content_slug: str, limit: int = 50):
+    normalized_type = (content_type or "").strip().lower()
+    normalized_slug = (content_slug or "").strip()
+    if normalized_type not in COMMENT_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid comment content type")
+    if not normalized_slug:
+        raise HTTPException(status_code=400, detail="Content slug is required")
+
+    safe_limit = min(max(limit, 1), 100)
+    comments = await db.comments.find(
+        {
+            "content_type": normalized_type,
+            "content_slug": normalized_slug,
+            "status": "approved",
+        },
+        {"_id": 0, "author_email": 0, "client_key": 0, "user_agent": 0, "moderated_by": 0}
+    ).sort("created_at", 1).limit(safe_limit).to_list(safe_limit)
+    return [normalize_comment_datetimes(comment) for comment in comments]
+
+@api_router.post("/comments")
+async def create_comment(comment_data: CommentCreate, request: Request):
+    if (comment_data.website or "").strip():
+        return {"message": "Comentario enviado para aprovacao."}
+
+    client_key = get_request_client_key(request, str(comment_data.author_email))
+    await enforce_comment_rate_limit(client_key)
+
+    content = await resolve_comment_content(comment_data.content_type, comment_data.content_slug)
+    author_name = sanitize_comment_text(
+        comment_data.author_name,
+        min_length=2,
+        max_length=80,
+        field_name="Name"
+    )
+    body = sanitize_comment_text(
+        comment_data.body,
+        min_length=3,
+        max_length=1200,
+        field_name="Comment"
+    )
+
+    now = datetime.now(timezone.utc)
+    comment_obj = Comment(
+        content_type=comment_data.content_type,
+        content_id=content.get("id"),
+        content_slug=content.get("slug") or comment_data.content_slug,
+        content_title=content.get("title"),
+        author_name=author_name,
+        author_email=comment_data.author_email,
+        body=body,
+        status="pending",
+        client_key=client_key,
+        user_agent=(request.headers.get("user-agent") or "")[:240] or None,
+        created_at=now,
+        updated_at=now,
+    )
+    doc = comment_obj.model_dump()
+    for field in ["created_at", "updated_at", "approved_at", "rejected_at"]:
+        if doc.get(field):
+            doc[field] = doc[field].isoformat()
+    await db.comments.insert_one(doc)
+    return {"message": "Comentario enviado para aprovacao."}
+
+@api_router.get("/admin/comments", response_model=List[Comment])
+async def get_admin_comments(
+    status: Optional[str] = None,
+    content_type: Optional[str] = None,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user)
+):
+    query = {}
+    if status:
+        normalized_status = status.strip().lower()
+        if normalized_status not in COMMENT_STATUS_VALUES:
+            raise HTTPException(status_code=400, detail="Invalid comment status")
+        query["status"] = normalized_status
+    if content_type:
+        normalized_type = content_type.strip().lower()
+        if normalized_type not in COMMENT_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid comment content type")
+        query["content_type"] = normalized_type
+
+    safe_limit = min(max(limit, 1), 200)
+    comments = await db.comments.find(query, {"_id": 0}).sort("created_at", -1).limit(safe_limit).to_list(safe_limit)
+    return [normalize_comment_datetimes(comment) for comment in comments]
+
+@api_router.patch("/admin/comments/{comment_id}/status", response_model=Comment)
+async def update_comment_status(
+    comment_id: str,
+    status_data: CommentStatusUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    now = datetime.now(timezone.utc)
+    update_doc = {
+        "status": status_data.status,
+        "updated_at": now.isoformat(),
+        "moderated_by": current_user.email,
+    }
+    if status_data.status == "approved":
+        update_doc["approved_at"] = now.isoformat()
+        update_doc["rejected_at"] = None
+    elif status_data.status == "rejected":
+        update_doc["rejected_at"] = now.isoformat()
+        update_doc["approved_at"] = None
+    else:
+        update_doc["approved_at"] = None
+        update_doc["rejected_at"] = None
+
+    result = await db.comments.update_one({"id": comment_id}, {"$set": update_doc})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    comment = await db.comments.find_one({"id": comment_id}, {"_id": 0})
+    return normalize_comment_datetimes(comment)
+
+@api_router.delete("/admin/comments/{comment_id}")
+async def delete_comment(comment_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.comments.delete_one({"id": comment_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    return {"message": "Comment deleted successfully"}
 
 # ============ BANNER ROUTES (Publicidade) ============
 
