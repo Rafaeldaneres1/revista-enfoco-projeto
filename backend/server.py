@@ -974,6 +974,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def get_posts(
     limit: int = 100,
     skip: int = 0,
+    compact: bool = False,
     published: Optional[bool] = None,
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
@@ -983,14 +984,19 @@ async def get_posts(
     if published is not None:
         query['published'] = published
 
-    posts = await db.posts.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    safe_limit = min(max(limit, 1), 100)
+    projection = {"_id": 0, "content": 0} if compact else {"_id": 0}
+    posts = await db.posts.find(query, projection).sort("created_at", -1).skip(skip).limit(safe_limit).to_list(safe_limit)
 
     posts = [
         normalize_post_datetimes(post)
         for post in posts
     ]
     posts = await hydrate_posts_with_team_members(dedupe_posts(posts))
-    return posts[skip:skip + limit]
+    if compact:
+        for post in posts:
+            post.setdefault("content", "")
+    return posts
 
 @api_router.get("/posts/{slug}", response_model=Post)
 async def get_post(
@@ -1217,6 +1223,7 @@ async def delete_column(column_id: str, current_user: User = Depends(get_current
 async def get_events(
     limit: int = 100,
     skip: int = 0,
+    compact: bool = False,
     published: Optional[bool] = None,
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
@@ -1226,9 +1233,12 @@ async def get_events(
     if published is not None:
         query['published'] = published
 
-    events = await db.events.find(query, {"_id": 0}).sort("event_date", 1).skip(skip).limit(limit).to_list(limit)
+    safe_limit = min(max(limit, 1), 100)
+    events = await db.events.find(query, {"_id": 0}).sort("event_date", 1).skip(skip).limit(safe_limit).to_list(safe_limit)
 
     for event in events:
+        if compact and isinstance(event.get("event_images"), list):
+            event["event_images"] = event["event_images"][:6]
         if isinstance(event.get('created_at'), str):
             event['created_at'] = datetime.fromisoformat(event['created_at'])
         if isinstance(event.get('updated_at'), str):
@@ -1317,6 +1327,7 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
 async def get_editions(
     limit: int = 100,
     skip: int = 0,
+    compact: bool = False,
     published: Optional[bool] = None,
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
@@ -1326,9 +1337,15 @@ async def get_editions(
     if published is not None:
         query['published'] = published
 
-    editions = await db.editions.find(query, {"_id": 0}).sort("edition_number", -1).skip(skip).limit(limit).to_list(limit)
+    safe_limit = min(max(limit, 1), 100)
+    editions = await db.editions.find(query, {"_id": 0}).sort("edition_number", -1).skip(skip).limit(safe_limit).to_list(safe_limit)
 
     for edition in editions:
+        if compact:
+            if isinstance(edition.get("preview_pages"), list):
+                edition["preview_pages"] = edition["preview_pages"][:1]
+            if isinstance(edition.get("reader_pages"), list):
+                edition["reader_pages"] = edition["reader_pages"][:1]
         if isinstance(edition.get('created_at'), str):
             edition['created_at'] = datetime.fromisoformat(edition['created_at'])
         if isinstance(edition.get('updated_at'), str):
