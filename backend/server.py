@@ -465,6 +465,17 @@ async def get_current_user(
 
     return User(**{k: v for k, v in user.items() if k != 'hashed_password'})
 
+
+async def get_optional_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> Optional[User]:
+    try:
+        return await get_current_user(request, credentials)
+    except HTTPException:
+        return None
+
+
 def create_slug(title: str) -> str:
     return slugify(title)
 
@@ -915,8 +926,15 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # ============ POSTS ROUTES (Reportagens) ============
 
 @api_router.get("/posts", response_model=List[Post])
-async def get_posts(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
+async def get_posts(
+    limit: int = 100,
+    skip: int = 0,
+    published: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     query = {}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query['published'] = published
 
@@ -930,13 +948,16 @@ async def get_posts(limit: int = 100, skip: int = 0, published: Optional[bool] =
     return posts[skip:skip + limit]
 
 @api_router.get("/posts/{slug}", response_model=Post)
-async def get_post(slug: str):
+async def get_post(
+    slug: str,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     post_candidates = await db.posts.find({"slug": slug}, {"_id": 0}).sort([
         ("updated_at", -1),
         ("created_at", -1)
     ]).to_list(10)
     post = normalize_post_datetimes(dedupe_posts(post_candidates)[0]) if post_candidates else None
-    if not post:
+    if not post or (not post.get("published", True) and (not current_user or current_user.role != "admin")):
         raise HTTPException(status_code=404, detail="Post not found")
 
     await hydrate_posts_with_team_members([post])
@@ -944,6 +965,7 @@ async def get_post(slug: str):
 
 @api_router.post("/posts", response_model=Post)
 async def create_post(post_data: PostCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     post_dict = post_data.model_dump()
     post_dict = await resolve_post_category_reference(post_dict)
     post_dict = await apply_team_member_to_post_payload(post_dict)
@@ -962,6 +984,7 @@ async def create_post(post_data: PostCreate, current_user: User = Depends(get_cu
 
 @api_router.put("/posts/{post_id}", response_model=Post)
 async def update_post(post_id: str, post_data: PostCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_post = await db.posts.find_one({"id": post_id}, {"_id": 0})
     if not existing_post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -983,6 +1006,7 @@ async def update_post(post_id: str, post_data: PostCreate, current_user: User = 
 
 @api_router.delete("/posts/{post_id}")
 async def delete_post(post_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.posts.delete_one({"id": post_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -1027,9 +1051,12 @@ async def get_columns(
     limit: int = 100,
     skip: int = 0,
     published: Optional[bool] = None,
-    columnist_id: Optional[str] = None
+    columnist_id: Optional[str] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query['published'] = published
     if columnist_id:
@@ -1049,9 +1076,12 @@ async def get_columns_by_columnist(
     columnist_id: str,
     limit: int = 24,
     skip: int = 0,
-    published: Optional[bool] = True
+    published: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {"columnist_id": columnist_id}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query["published"] = published
 
@@ -1068,9 +1098,12 @@ async def get_columns_by_columnist(
     return columns
 
 @api_router.get("/columns/{slug}", response_model=Column)
-async def get_column(slug: str):
+async def get_column(
+    slug: str,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     column = await db.columns.find_one({"slug": slug}, {"_id": 0})
-    if not column:
+    if not column or (not column.get("published", True) and (not current_user or current_user.role != "admin")):
         raise HTTPException(status_code=404, detail="Column not found")
 
     serialize_datetimes(column, 'created_at', 'updated_at')
@@ -1085,6 +1118,7 @@ async def get_column(slug: str):
 
 @api_router.post("/columns", response_model=Column)
 async def create_column(column_data: ColumnCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     column_dict = column_data.model_dump()
     column_dict = await apply_columnist_to_column_payload(column_dict)
     column_dict['slug'] = create_slug(column_data.title)
@@ -1101,6 +1135,7 @@ async def create_column(column_data: ColumnCreate, current_user: User = Depends(
 
 @api_router.put("/columns/{column_id}", response_model=Column)
 async def update_column(column_id: str, column_data: ColumnCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_column = await db.columns.find_one({"id": column_id}, {"_id": 0})
     if not existing_column:
         raise HTTPException(status_code=404, detail="Column not found")
@@ -1125,6 +1160,7 @@ async def update_column(column_id: str, column_data: ColumnCreate, current_user:
 
 @api_router.delete("/columns/{column_id}")
 async def delete_column(column_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.columns.delete_one({"id": column_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Column not found")
@@ -1133,8 +1169,15 @@ async def delete_column(column_id: str, current_user: User = Depends(get_current
 # ============ EVENTS ROUTES (Eventos) ============
 
 @api_router.get("/events", response_model=List[Event])
-async def get_events(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
+async def get_events(
+    limit: int = 100,
+    skip: int = 0,
+    published: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     query = {}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query['published'] = published
 
@@ -1151,9 +1194,12 @@ async def get_events(limit: int = 100, skip: int = 0, published: Optional[bool] 
     return events
 
 @api_router.get("/events/{slug}", response_model=Event)
-async def get_event(slug: str):
+async def get_event(
+    slug: str,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     event = await db.events.find_one({"slug": slug}, {"_id": 0})
-    if not event:
+    if not event or (not event.get("published", True) and (not current_user or current_user.role != "admin")):
         raise HTTPException(status_code=404, detail="Event not found")
 
     if isinstance(event.get('created_at'), str):
@@ -1167,6 +1213,7 @@ async def get_event(slug: str):
 
 @api_router.post("/events", response_model=Event)
 async def create_event(event_data: EventCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     event_dict = event_data.model_dump()
     event_dict['slug'] = create_slug(event_data.title)
     event_dict['event_date'] = event_dict['event_date'].isoformat()
@@ -1189,6 +1236,7 @@ async def create_event(event_data: EventCreate, current_user: User = Depends(get
 
 @api_router.put("/events/{event_id}", response_model=Event)
 async def update_event(event_id: str, event_data: EventCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_event = await db.events.find_one({"id": event_id}, {"_id": 0})
     if not existing_event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -1212,6 +1260,7 @@ async def update_event(event_id: str, event_data: EventCreate, current_user: Use
 
 @api_router.delete("/events/{event_id}")
 async def delete_event(event_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.events.delete_one({"id": event_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -1220,8 +1269,15 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
 # ============ EDITIONS ROUTES (Edições) ============
 
 @api_router.get("/editions", response_model=List[Edition])
-async def get_editions(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
+async def get_editions(
+    limit: int = 100,
+    skip: int = 0,
+    published: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     query = {}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query['published'] = published
 
@@ -1236,9 +1292,12 @@ async def get_editions(limit: int = 100, skip: int = 0, published: Optional[bool
     return editions
 
 @api_router.get("/editions/{slug}", response_model=Edition)
-async def get_edition(slug: str):
+async def get_edition(
+    slug: str,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     edition = await db.editions.find_one({"slug": slug}, {"_id": 0})
-    if not edition:
+    if not edition or (not edition.get("published", True) and (not current_user or current_user.role != "admin")):
         raise HTTPException(status_code=404, detail="Edition not found")
 
     if isinstance(edition.get('created_at'), str):
@@ -1250,6 +1309,7 @@ async def get_edition(slug: str):
 
 @api_router.post("/editions", response_model=Edition)
 async def create_edition(edition_data: EditionCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     edition_dict = edition_data.model_dump()
     edition_dict['slug'] = create_slug(edition_data.title)
 
@@ -1263,6 +1323,7 @@ async def create_edition(edition_data: EditionCreate, current_user: User = Depen
 
 @api_router.put("/editions/{edition_id}", response_model=Edition)
 async def update_edition(edition_id: str, edition_data: EditionCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_edition = await db.editions.find_one({"id": edition_id}, {"_id": 0})
     if not existing_edition:
         raise HTTPException(status_code=404, detail="Edition not found")
@@ -1283,6 +1344,7 @@ async def update_edition(edition_id: str, edition_data: EditionCreate, current_u
 
 @api_router.delete("/editions/{edition_id}")
 async def delete_edition(edition_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.editions.delete_one({"id": edition_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Edition not found")
@@ -1291,8 +1353,13 @@ async def delete_edition(edition_id: str, current_user: User = Depends(get_curre
 # ============ CATEGORIES ROUTES ============
 
 @api_router.get("/categories", response_model=List[Category])
-async def get_categories(active: Optional[bool] = None):
+async def get_categories(
+    active: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     query = {}
+    if active is None and (not current_user or current_user.role != "admin"):
+        active = True
     if active is not None:
         query["active"] = active
 
@@ -1301,6 +1368,7 @@ async def get_categories(active: Optional[bool] = None):
 
 @api_router.post("/categories", response_model=Category)
 async def create_category(category_data: CategoryCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     slug = create_slug(category_data.name)
     if not slug:
         raise HTTPException(status_code=400, detail="Could not generate slug for category")
@@ -1319,6 +1387,7 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
 
 @api_router.put("/categories/{category_id}", response_model=Category)
 async def update_category(category_id: str, category_data: CategoryCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_category = await db.categories.find_one({"id": category_id}, {"_id": 0})
     if not existing_category:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -1342,6 +1411,7 @@ async def update_category(category_id: str, category_data: CategoryCreate, curre
 
 @api_router.delete("/categories/{category_id}")
 async def delete_category(category_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     related_post = await db.posts.find_one({"category_id": category_id}, {"_id": 0})
     if related_post:
         raise HTTPException(status_code=400, detail="Category is linked to existing posts")
@@ -1433,6 +1503,7 @@ async def get_admin_comments(
     limit: int = 100,
     current_user: User = Depends(get_current_user)
 ):
+    ensure_admin(current_user)
     query = {}
     if status:
         normalized_status = status.strip().lower()
@@ -1455,6 +1526,7 @@ async def update_comment_status(
     status_data: CommentStatusUpdate,
     current_user: User = Depends(get_current_user)
 ):
+    ensure_admin(current_user)
     now = datetime.now(timezone.utc)
     update_doc = {
         "status": status_data.status,
@@ -1480,6 +1552,7 @@ async def update_comment_status(
 
 @api_router.delete("/admin/comments/{comment_id}")
 async def delete_comment(comment_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.comments.delete_one({"id": comment_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Comment not found")
@@ -1505,6 +1578,7 @@ async def get_public_banners(position: Optional[str] = None):
 
 @api_router.get("/admin/banners", response_model=List[Banner])
 async def get_admin_banners(current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     banners = await db.banners.find({}, {"_id": 0}).sort([
         ("display_order", 1),
         ("created_at", -1)
@@ -1513,6 +1587,7 @@ async def get_admin_banners(current_user: User = Depends(get_current_user)):
 
 @api_router.get("/admin/banners/{banner_id}", response_model=Banner)
 async def get_admin_banner(banner_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     banner = await db.banners.find_one({"id": banner_id}, {"_id": 0})
     if not banner:
         raise HTTPException(status_code=404, detail="Banner not found")
@@ -1593,6 +1668,7 @@ async def get_columnist(columnist_id: str):
 
 @api_router.post("/columnists", response_model=Columnist)
 async def create_columnist(columnist_data: ColumnistCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     columnist_dict = columnist_data.model_dump()
     columnist_dict["slug"] = await create_unique_slug(db.columnists, columnist_dict.get("name", "colunista"))
     columnist_obj = Columnist(**columnist_dict)
@@ -1605,6 +1681,7 @@ async def create_columnist(columnist_data: ColumnistCreate, current_user: User =
 
 @api_router.put("/columnists/{columnist_id}", response_model=Columnist)
 async def update_columnist(columnist_id: str, columnist_data: ColumnistCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_columnist = await db.columnists.find_one({"id": columnist_id}, {"_id": 0})
     if not existing_columnist:
         raise HTTPException(status_code=404, detail="Columnist not found")
@@ -1619,6 +1696,7 @@ async def update_columnist(columnist_id: str, columnist_data: ColumnistCreate, c
 
 @api_router.delete("/columnists/{columnist_id}")
 async def delete_columnist(columnist_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     linked_column = await db.columns.find_one({"columnist_id": columnist_id}, {"_id": 0})
     if linked_column:
         raise HTTPException(status_code=400, detail="Columnist is linked to existing columns")
@@ -1631,8 +1709,15 @@ async def delete_columnist(columnist_id: str, current_user: User = Depends(get_c
 # ============ TEAM ROUTES (Equipe Editorial) ============
 
 @api_router.get("/team", response_model=List[TeamMember])
-async def get_team(limit: int = 100, skip: int = 0, published: Optional[bool] = None):
+async def get_team(
+    limit: int = 100,
+    skip: int = 0,
+    published: Optional[bool] = None,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     query = {}
+    if published is None and (not current_user or current_user.role != "admin"):
+        published = True
     if published is not None:
         query['published'] = published
 
@@ -1654,9 +1739,12 @@ async def get_team(limit: int = 100, skip: int = 0, published: Optional[bool] = 
     return team_members
 
 @api_router.get("/team/{team_member_id}", response_model=TeamMember)
-async def get_team_member(team_member_id: str):
+async def get_team_member(
+    team_member_id: str,
+    current_user: Optional[User] = Depends(get_optional_current_user)
+):
     member = await db.team.find_one({"id": team_member_id}, {"_id": 0})
-    if not member:
+    if not member or (not member.get("published", True) and (not current_user or current_user.role != "admin")):
         raise HTTPException(status_code=404, detail="Team member not found")
 
     if isinstance(member.get('created_at'), str):
@@ -1668,6 +1756,7 @@ async def get_team_member(team_member_id: str):
 
 @api_router.post("/team", response_model=TeamMember)
 async def create_team_member(team_member_data: TeamMemberCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     team_member_obj = TeamMember(**team_member_data.model_dump())
     doc = team_member_obj.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
@@ -1678,6 +1767,7 @@ async def create_team_member(team_member_data: TeamMemberCreate, current_user: U
 
 @api_router.put("/team/{team_member_id}", response_model=TeamMember)
 async def update_team_member(team_member_id: str, team_member_data: TeamMemberCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     existing_member = await db.team.find_one({"id": team_member_id}, {"_id": 0})
     if not existing_member:
         raise HTTPException(status_code=404, detail="Team member not found")
@@ -1697,6 +1787,7 @@ async def update_team_member(team_member_id: str, team_member_data: TeamMemberCr
 
 @api_router.delete("/team/{team_member_id}")
 async def delete_team_member(team_member_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     result = await db.team.delete_one({"id": team_member_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Team member not found")
@@ -1717,6 +1808,7 @@ async def get_about_settings():
 
 @api_router.put("/about", response_model=AboutSettings)
 async def update_about_settings(about_data: AboutSettingsUpdate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     settings_obj = AboutSettings(**about_data.model_dump(), updated_at=datetime.now(timezone.utc))
     doc = settings_obj.model_dump()
     doc['updated_at'] = doc['updated_at'].isoformat()
@@ -1739,6 +1831,7 @@ async def get_home_settings():
 
 @api_router.put("/home-settings", response_model=HomeSettings)
 async def update_home_settings(home_data: HomeSettingsUpdate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     settings_obj = HomeSettings(**home_data.model_dump(), updated_at=datetime.now(timezone.utc))
     doc = settings_obj.model_dump()
     doc['updated_at'] = doc['updated_at'].isoformat()
@@ -1750,6 +1843,7 @@ async def update_home_settings(home_data: HomeSettingsUpdate, current_user: User
 
 @api_router.post("/media/upload", response_model=Media)
 async def upload_media(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     try:
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file selected")
@@ -1761,6 +1855,10 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
 
         if not file_extension:
             file_extension = mimetypes.guess_extension(content_type) or ".jpg"
+        if file_extension not in ALLOWED_IMAGE_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Unsupported image file type")
+        if content_type and not content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Only image uploads are allowed")
 
         file_bytes = await file.read()
         validate_and_prepare_image_upload(file, file_bytes, file_extension)
@@ -1792,10 +1890,11 @@ async def upload_media(file: UploadFile = File(...), current_user: User = Depend
         raise
     except Exception as error:
         logging.exception("Image upload failed: %s", error)
-        raise HTTPException(status_code=500, detail=f"Image upload failed: {error}")
+        raise HTTPException(status_code=500, detail="Image upload failed")
 
 @api_router.post("/media/upload-pdf", response_model=Media)
 async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     raise HTTPException(
         status_code=400,
         detail="PDF upload was disabled. Please provide an external PDF URL in the edition form."
@@ -1803,6 +1902,7 @@ async def upload_pdf(file: UploadFile = File(...), current_user: User = Depends(
 
 @api_router.get("/media", response_model=List[Media])
 async def get_media(current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
     media_list = await db.media.find({}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
 
     for media in media_list:
