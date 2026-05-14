@@ -213,6 +213,7 @@ async def startup_db_client():
         await db.users.create_index([("email", pymongo.ASCENDING)], unique=True)
     except Exception:
         await db.users.create_index([("email", pymongo.ASCENDING)])
+    await ensure_bootstrap_admin()
     await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.login_attempts.create_index("key", unique=True)
     await db.login_attempts.create_index("expires_at", expireAfterSeconds=0)
@@ -231,6 +232,48 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
+
+async def ensure_bootstrap_admin() -> None:
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "")
+    admin_name = os.environ.get("ADMIN_NAME", "Administrador Enfoco").strip() or "Administrador Enfoco"
+
+    if not admin_email or not admin_password:
+        return
+
+    if len(admin_password) < 10:
+        logger.warning("ADMIN_PASSWORD ignored because it is shorter than 10 characters.")
+        return
+
+    now = datetime.now(timezone.utc)
+    hashed_password = get_password_hash(admin_password)
+    existing_user = await db.users.find_one({"email": admin_email}, {"_id": 0})
+
+    if existing_user:
+        await db.users.update_one(
+            {"email": admin_email},
+            {
+                "$set": {
+                    "name": existing_user.get("name") or admin_name,
+                    "role": "admin",
+                    "hashed_password": hashed_password,
+                }
+            },
+        )
+        logger.info("Bootstrap admin user ensured.")
+        return
+
+    user = UserInDB(
+        email=admin_email,
+        name=admin_name,
+        role="admin",
+        hashed_password=hashed_password,
+        created_at=now,
+    )
+    doc = user.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    await db.users.insert_one(doc)
+    logger.info("Bootstrap admin user created.")
 
 def ensure_admin(current_user: User) -> None:
     if current_user.role != "admin":
@@ -861,6 +904,7 @@ async def enforce_home_highlight_rules(post_dict: dict, current_post_id: Optiona
 @api_router.post("/auth/register", response_model=User)
 async def register(user_data: UserCreate, current_user: User = Depends(get_current_user)):
     ensure_admin(current_user)
+    user_data.email = user_data.email.lower()
     # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email})
     if existing_user:
@@ -880,6 +924,7 @@ async def register(user_data: UserCreate, current_user: User = Depends(get_curre
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(user_data: UserLogin, request: Request, response: Response):
+    user_data.email = user_data.email.lower()
     client_key = get_request_client_key(request, user_data.email)
     await enforce_login_rate_limit(client_key)
     user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
