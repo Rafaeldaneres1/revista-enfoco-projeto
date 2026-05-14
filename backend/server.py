@@ -933,7 +933,7 @@ async def get_posts(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query['published'] = published
@@ -1055,7 +1055,7 @@ async def get_columns(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query['published'] = published
@@ -1080,7 +1080,7 @@ async def get_columns_by_columnist(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {"columnist_id": columnist_id}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query["published"] = published
@@ -1176,7 +1176,7 @@ async def get_events(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query['published'] = published
@@ -1276,7 +1276,7 @@ async def get_editions(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query['published'] = published
@@ -1358,7 +1358,7 @@ async def get_categories(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if active is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         active = True
     if active is not None:
         query["active"] = active
@@ -1716,7 +1716,7 @@ async def get_team(
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     query = {}
-    if published is None and (not current_user or current_user.role != "admin"):
+    if not current_user or current_user.role != "admin":
         published = True
     if published is not None:
         query['published'] = published
