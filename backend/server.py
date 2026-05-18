@@ -149,6 +149,11 @@ class PublicCacheMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/columns/")
             or path == "/api/columnists"
             or path.startswith("/api/columnists/")
+            or path == "/api/events"
+            or path.startswith("/api/events/")
+            or path == "/api/editions"
+            or path.startswith("/api/editions/")
+            or path == "/api/categories"
         ):
             response.headers.setdefault("Cache-Control", "public, max-age=120, stale-while-revalidate=300")
 
@@ -1101,6 +1106,7 @@ async def get_home_highlights():
 async def get_columns(
     limit: int = 100,
     skip: int = 0,
+    compact: bool = False,
     published: Optional[bool] = None,
     columnist_id: Optional[str] = None,
     current_user: Optional[User] = Depends(get_optional_current_user)
@@ -1113,12 +1119,16 @@ async def get_columns(
     if columnist_id:
         query['columnist_id'] = columnist_id
 
-    columns = await db.columns.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    safe_limit = min(max(limit, 1), 100)
+    projection = {"_id": 0, "content": 0} if compact else {"_id": 0}
+    columns = await db.columns.find(query, projection).sort("created_at", -1).skip(skip).limit(safe_limit).to_list(safe_limit)
     columnists_map = await get_columnists_map([column.get("columnist_id") for column in columns])
 
     for column in columns:
         serialize_datetimes(column, 'created_at', 'updated_at')
         hydrate_column_with_columnist(column, columnists_map.get(column.get("columnist_id")))
+        if compact:
+            column.setdefault("content", "")
 
     return columns
 
@@ -1694,14 +1704,20 @@ async def delete_banner(banner_id: str, current_user: User = Depends(get_current
 # ============ COLUMNISTS ROUTES (Colunistas) ============
 
 @api_router.get("/columnists", response_model=List[Columnist])
-async def get_columnists(limit: int = 100, skip: int = 0):
+async def get_columnists(limit: int = 100, skip: int = 0, compact: bool = False):
+    safe_limit = min(max(limit, 1), 100)
+    projection = (
+        {"_id": 0, "name": 1, "role": 1, "bio": 1, "image": 1, "slug": 1, "id": 1, "created_at": 1, "updated_at": 1}
+        if compact
+        else {"_id": 0}
+    )
     columnists = (
         await db.columnists
-        .find({}, {"_id": 0})
+        .find({}, projection)
         .sort([("name", 1), ("created_at", -1)])
         .skip(skip)
-        .limit(limit)
-        .to_list(limit)
+        .limit(safe_limit)
+        .to_list(safe_limit)
     )
     columnists = await ensure_columnist_slugs(columnists)
     return [serialize_datetimes(columnist, "created_at", "updated_at") for columnist in columnists]
