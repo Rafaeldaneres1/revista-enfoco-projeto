@@ -127,7 +127,7 @@ const ColumnsPage = () => {
             <em className="font-serif italic font-normal">Revista Enfoco</em>
           </h1>
           <p className="text-base lg:text-lg text-white/78 max-w-2xl leading-relaxed mb-10">
-            Perfis autorais, especialistas e articulistas que ajudam a ampliar o debate publico com leitura tecnica e sensivel.
+            Perfis autorais, especialistas e articulistas que ajudam a ampliar o debate público com leitura técnica e sensível.
           </p>
 
           <PublicSearchBar
