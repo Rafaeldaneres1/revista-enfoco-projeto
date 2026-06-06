@@ -1,14 +1,17 @@
 {
   "name": "Revista Enfoco - Santa Maria RS",
   "short_name": "Enfoco",
-  "description": "Revista digital de Santa Maria com notícias, colunas, eventos e edições",
+  "description": "Revista digital de Santa Maria com reportagens, colunas, eventos e edi??es",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#000000",
   "background_color": "#ffffff",
-  "categories": ["news", "magazine"],
+  "categories": [
+    "news",
+    "magazine"
+  ],
   "screenshots": [
     {
       "src": "/screenshot-1.png",
@@ -25,25 +28,25 @@
   ],
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/logo192.png?v=3",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/logo512.png?v=3",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-192.png",
+      "src": "/logo192.png?v=3",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-maskable-512.png",
+      "src": "/logo512.png?v=3",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -51,14 +54,14 @@
   ],
   "shortcuts": [
     {
-      "name": "Ver Notícias",
-      "short_name": "Notícias",
-      "description": "Acesse as últimas notícias de Santa Maria",
+      "name": "Ver Reportagens",
+      "short_name": "Reportagens",
+      "description": "Acesse as ?ltimas reportagens de Santa Maria",
       "url": "/noticias",
       "icons": [
         {
-          "src": "/icon-96.png",
-          "sizes": "96x96"
+          "src": "/logo192.png?v=3",
+          "sizes": "192x192"
         }
       ]
     },
@@ -69,8 +72,8 @@
       "url": "/colunas",
       "icons": [
         {
-          "src": "/icon-96.png",
-          "sizes": "96x96"
+          "src": "/logo192.png?v=3",
+          "sizes": "192x192"
         }
       ]
     },
@@ -81,8 +84,8 @@
       "url": "/eventos",
       "icons": [
         {
-          "src": "/icon-96.png",
-          "sizes": "96x96"
+          "src": "/logo192.png?v=3",
+          "sizes": "192x192"
         }
       ]
     }
@@ -98,7 +101,10 @@
       "files": [
         {
           "name": "media",
-          "accept": ["image/*", "video/*"]
+          "accept": [
+            "image/*",
+            "video/*"
+          ]
         }
       ]
     }
