@@ -142,6 +142,8 @@ class PublicCacheMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Cache-Control", "public, max-age=120, stale-while-revalidate=300")
         elif path == "/api/comments":
             response.headers.setdefault("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
+        elif path == "/api/privacy-settings":
+            response.headers.setdefault("Cache-Control", "public, max-age=300, stale-while-revalidate=600")
         elif (
             path == "/api/posts"
             or path.startswith("/api/posts/")
@@ -213,6 +215,7 @@ async def startup_db_client():
         ("created_at", pymongo.DESCENDING)
     ])
     await db.comments.create_index([("status", pymongo.ASCENDING), ("created_at", pymongo.DESCENDING)])
+    await db.privacy_settings.create_index([("id", pymongo.ASCENDING)], unique=True)
 
     try:
         await db.users.create_index([("email", pymongo.ASCENDING)], unique=True)
@@ -1501,7 +1504,9 @@ def normalize_comment_datetimes(comment: dict) -> dict:
         "created_at",
         "updated_at",
         "approved_at",
-        "rejected_at"
+        "rejected_at",
+        "privacy_consent_at",
+        "retention_until"
     )
 
 @api_router.get("/comments", response_model=List[PublicComment])
@@ -1528,6 +1533,9 @@ async def get_public_comments(content_type: str, content_slug: str, limit: int =
 async def create_comment(comment_data: CommentCreate, request: Request):
     if (comment_data.website or "").strip():
         return {"message": "Comentario enviado para aprovacao."}
+
+    if not comment_data.privacy_consent:
+        raise HTTPException(status_code=400, detail="Consentimento de privacidade e obrigatorio.")
 
     client_key = get_request_client_key(request, str(comment_data.author_email))
     await enforce_comment_rate_limit(client_key)
@@ -1556,13 +1564,16 @@ async def create_comment(comment_data: CommentCreate, request: Request):
         author_email=comment_data.author_email,
         body=body,
         status="pending",
+        privacy_consent=True,
+        privacy_consent_at=now,
+        retention_until=now + timedelta(days=365),
         client_key=client_key,
         user_agent=(request.headers.get("user-agent") or "")[:240] or None,
         created_at=now,
         updated_at=now,
     )
     doc = comment_obj.model_dump()
-    for field in ["created_at", "updated_at", "approved_at", "rejected_at"]:
+    for field in ["created_at", "updated_at", "approved_at", "rejected_at", "privacy_consent_at", "retention_until"]:
         if doc.get(field):
             doc[field] = doc[field].isoformat()
     await db.comments.insert_one(doc)
@@ -1915,6 +1926,37 @@ async def update_home_settings(home_data: HomeSettingsUpdate, current_user: User
     doc['updated_at'] = doc['updated_at'].isoformat()
 
     await db.home_settings.update_one({"id": "home-page"}, {"$set": doc}, upsert=True)
+    return settings_obj
+
+# ============ PRIVACY / LGPD SETTINGS ROUTES ============
+
+def build_default_privacy_settings() -> PrivacySettings:
+    return PrivacySettings(updated_at=datetime.now(timezone.utc))
+
+def normalize_privacy_settings(settings: dict) -> dict:
+    if isinstance(settings.get("updated_at"), str):
+        settings["updated_at"] = datetime.fromisoformat(settings["updated_at"])
+    return settings
+
+@api_router.get("/privacy-settings", response_model=PrivacySettings)
+async def get_privacy_settings():
+    settings = await db.privacy_settings.find_one({"id": "privacy-settings"}, {"_id": 0})
+    if not settings:
+        return build_default_privacy_settings()
+
+    return normalize_privacy_settings(settings)
+
+@api_router.put("/privacy-settings", response_model=PrivacySettings)
+async def update_privacy_settings(
+    privacy_data: PrivacySettingsUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    ensure_admin(current_user)
+    settings_obj = PrivacySettings(**privacy_data.model_dump(), updated_at=datetime.now(timezone.utc))
+    doc = settings_obj.model_dump()
+    doc["updated_at"] = doc["updated_at"].isoformat()
+
+    await db.privacy_settings.update_one({"id": "privacy-settings"}, {"$set": doc}, upsert=True)
     return settings_obj
 
 # ============ MEDIA ROUTES (Upload de imagens) ============
