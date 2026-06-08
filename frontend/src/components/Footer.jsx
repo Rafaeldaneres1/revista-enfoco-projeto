@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   Instagram,
   Linkedin,
-  LockKeyhole,
   Mail,
   MapPin,
   Megaphone,
@@ -350,14 +349,6 @@ const Footer = () => {
               >
                 Preferências de privacidade
               </button>
-              <Link
-                to="/admin"
-                className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/30 transition-colors duration-200 hover:text-white/60"
-                aria-label="Acessar painel administrativo"
-              >
-                <LockKeyhole className="h-3 w-3" aria-hidden="true" />
-                Admin
-              </Link>
               <a
                 href="https://nodix.site/"
                 target="_blank"
