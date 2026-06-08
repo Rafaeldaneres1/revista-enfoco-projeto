@@ -696,7 +696,7 @@ const Home = () => {
                           </div>
 
                           {/* Título */}
-                          <h3 className="font-display font-bold text-charcoal mb-3 leading-tight group-hover:text-royal-blue transition-colors duration-200 text-lg lg:text-xl line-clamp-3 min-h-[4.75rem]">
+                          <h3 className="font-display font-bold text-charcoal mb-3 leading-tight group-hover:text-royal-blue transition-colors duration-200 text-lg lg:text-xl line-clamp-3 md:min-h-[4.75rem]">
                             {sanitizeText(post.title)}
                           </h3>
 
@@ -800,14 +800,14 @@ const Home = () => {
         </section>
       )}
 
-      <AdBanner position="home_after_highlights" className="py-10 sm:py-12" />
+      <AdBanner position="home_after_highlights" className="py-4 sm:py-8 lg:py-12" />
 
-      <section className="bg-porcelain py-28">
+      <section className="bg-porcelain py-16 md:py-28">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <ScrollReveal animation="fadeIn" className="mb-20">
-            <p className="label-premium mb-4">{sanitizeText(homeSettings.recommended_label)}</p>
+          <ScrollReveal animation="fadeIn" className="mb-12 md:mb-20">
+            <p className="label-premium mb-3 md:mb-4">{sanitizeText(homeSettings.recommended_label)}</p>
             <div className="flex justify-between items-end gap-6">
-              <h2 className="font-display text-5xl lg:text-6xl font-bold text-charcoal">
+              <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-charcoal leading-[0.95] sm:leading-none">
                 {sanitizeText(homeSettings.recommended_title_prefix)}
                 <br />
                 <em className="font-serif italic font-normal">{sanitizeText(homeSettings.recommended_title_emphasis)}</em>
@@ -857,7 +857,7 @@ const Home = () => {
                         categorySlug={post.category_slug}
                         className="text-xs font-sans tracking-[0.2em] uppercase mb-4 font-semibold"
                       />
-                      <h3 className="font-display text-xl lg:text-2xl font-bold text-charcoal mb-4 leading-tight group-hover:text-royal-blue transition-colors duration-200 line-clamp-3 min-h-[5.4rem]">
+                      <h3 className="font-display text-xl lg:text-2xl font-bold text-charcoal mb-3 md:mb-4 leading-tight group-hover:text-royal-blue transition-colors duration-200 line-clamp-3 md:min-h-[5.4rem]">
                         {sanitizeText(post.title)}
                       </h3>
                       <p className="text-sm text-stone leading-relaxed mb-5 line-clamp-2 text-opacity-80 flex-1">
@@ -943,7 +943,7 @@ const Home = () => {
                           <p className="text-[11px] font-sans tracking-[0.18em] uppercase text-royal-blue font-semibold mb-4">
                             Coluna
                           </p>
-                          <h3 className="font-display text-2xl font-bold text-charcoal leading-tight mb-4 group-hover:text-royal-blue transition-colors duration-300 line-clamp-3 min-h-[5.7rem]">
+                          <h3 className="font-display text-2xl font-bold text-charcoal leading-tight mb-3 md:mb-4 group-hover:text-royal-blue transition-colors duration-300 line-clamp-3 md:min-h-[5.7rem]">
                             {sanitizeText(column.title)}
                           </h3>
                           <p className="text-sm text-stone leading-relaxed line-clamp-3 mb-6 flex-1">
