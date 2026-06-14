@@ -291,6 +291,7 @@ BANNER_POSITION_VALUES = {
 class BannerBase(BaseModel):
     title: str
     image: str
+    mobile_image: Optional[str] = None
     link_url: Optional[str] = None
     active: bool = True
     display_order: int = 0
@@ -311,6 +312,12 @@ class BannerBase(BaseModel):
         if not normalized:
             raise ValueError("Banner image is required")
         return normalized
+
+    @field_validator("mobile_image")
+    @classmethod
+    def normalize_mobile_image(cls, value: Optional[str]) -> Optional[str]:
+        normalized = (value or "").strip()
+        return normalized or None
 
     @field_validator("link_url")
     @classmethod
