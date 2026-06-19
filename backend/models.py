@@ -284,6 +284,7 @@ BANNER_POSITION_VALUES = {
     "columns_after_hero",
     "events_after_hero",
     "editions_after_hero",
+    "tv_programs_top",
     "article_middle",
     "article_footer",
 }
@@ -342,6 +343,46 @@ class BannerCreate(BannerBase):
 class Banner(BannerBase):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# TV Program Models
+class TVProgramBase(BaseModel):
+    title: str
+    youtube_url: str
+    thumbnail_url: Optional[str] = None
+    active: bool = True
+    display_order: int = 0
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("TV program title is required")
+        return normalized
+
+    @field_validator("youtube_url")
+    @classmethod
+    def validate_youtube_url(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("YouTube URL is required")
+        return normalized
+
+    @field_validator("thumbnail_url")
+    @classmethod
+    def normalize_thumbnail_url(cls, value: Optional[str]) -> Optional[str]:
+        normalized = (value or "").strip()
+        return normalized or None
+
+class TVProgramCreate(TVProgramBase):
+    pass
+
+class TVProgram(TVProgramBase):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    youtube_video_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

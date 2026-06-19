@@ -24,6 +24,7 @@ import shutil
 from slugify import slugify
 from io import BytesIO
 from collections import defaultdict, deque
+from urllib.parse import parse_qs, urlparse
 from xml.etree import ElementTree
 from PIL import Image, ImageOps, UnidentifiedImageError
 import cloudinary
@@ -208,6 +209,9 @@ async def startup_db_client():
     await db.banners.create_index([("active", pymongo.ASCENDING)])
     await db.banners.create_index([("positions", pymongo.ASCENDING)])
     await db.banners.create_index([("display_order", pymongo.ASCENDING)])
+    await db.tv_programs.create_index([("active", pymongo.ASCENDING)])
+    await db.tv_programs.create_index([("display_order", pymongo.ASCENDING)])
+    await db.tv_programs.create_index([("created_at", pymongo.DESCENDING)])
     await db.comments.create_index([
         ("content_type", pymongo.ASCENDING),
         ("content_slug", pymongo.ASCENDING),
@@ -1711,6 +1715,128 @@ async def delete_banner(banner_id: str, current_user: User = Depends(get_current
         raise HTTPException(status_code=404, detail="Banner not found")
 
     return {"message": "Banner deleted successfully"}
+
+# ============ TV PROGRAMS ROUTES (Programas de TV) ============
+
+YOUTUBE_ALLOWED_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "youtu.be",
+    "www.youtu.be",
+}
+YOUTUBE_VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,}$")
+
+
+def extract_youtube_video_id(youtube_url: str) -> str:
+    raw_url = str(youtube_url or "").strip()
+    parsed = urlparse(raw_url)
+    host = parsed.netloc.lower()
+
+    if parsed.scheme not in {"http", "https"} or host not in YOUTUBE_ALLOWED_HOSTS:
+        raise HTTPException(status_code=400, detail="Informe um link válido do YouTube.")
+
+    candidate = ""
+    if host in {"youtu.be", "www.youtu.be"}:
+        candidate = parsed.path.strip("/").split("/")[0]
+    elif parsed.path == "/watch":
+        candidate = parse_qs(parsed.query).get("v", [""])[0]
+    else:
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) >= 2 and parts[0] in {"embed", "shorts", "live"}:
+            candidate = parts[1]
+
+    if not candidate or not YOUTUBE_VIDEO_ID_RE.match(candidate):
+        raise HTTPException(status_code=400, detail="Informe um link válido do YouTube.")
+
+    return candidate
+
+
+def normalize_tv_program(program: dict) -> dict:
+    normalized = serialize_datetimes(program, "created_at", "updated_at")
+    video_id = normalized.get("youtube_video_id")
+
+    if not video_id and normalized.get("youtube_url"):
+        try:
+            video_id = extract_youtube_video_id(normalized["youtube_url"])
+            normalized["youtube_video_id"] = video_id
+        except HTTPException:
+            pass
+
+    if video_id and not normalized.get("thumbnail_url"):
+        normalized["thumbnail_url"] = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
+
+    return normalized
+
+
+@api_router.get("/tv-programs", response_model=List[TVProgram])
+async def get_public_tv_programs():
+    programs = await db.tv_programs.find({"active": True}, {"_id": 0}).sort([
+        ("display_order", pymongo.ASCENDING),
+        ("created_at", pymongo.DESCENDING)
+    ]).to_list(100)
+    return [normalize_tv_program(program) for program in programs]
+
+
+@api_router.get("/admin/tv-programs", response_model=List[TVProgram])
+async def get_admin_tv_programs(current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    programs = await db.tv_programs.find({}, {"_id": 0}).sort([
+        ("display_order", pymongo.ASCENDING),
+        ("created_at", pymongo.DESCENDING)
+    ]).to_list(200)
+    return [normalize_tv_program(program) for program in programs]
+
+
+@api_router.get("/admin/tv-programs/{program_id}", response_model=TVProgram)
+async def get_admin_tv_program(program_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    program = await db.tv_programs.find_one({"id": program_id}, {"_id": 0})
+    if not program:
+        raise HTTPException(status_code=404, detail="Programa de TV não encontrado")
+    return normalize_tv_program(program)
+
+
+@api_router.post("/admin/tv-programs", response_model=TVProgram)
+async def create_tv_program(program_data: TVProgramCreate, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    video_id = extract_youtube_video_id(program_data.youtube_url)
+    program_obj = TVProgram(**program_data.model_dump(), youtube_video_id=video_id)
+    doc = program_obj.model_dump()
+    doc["created_at"] = doc["created_at"].isoformat()
+    doc["updated_at"] = doc["updated_at"].isoformat()
+    await db.tv_programs.insert_one(doc)
+    return normalize_tv_program(doc)
+
+
+@api_router.put("/admin/tv-programs/{program_id}", response_model=TVProgram)
+async def update_tv_program(
+    program_id: str,
+    program_data: TVProgramCreate,
+    current_user: User = Depends(get_current_user)
+):
+    ensure_admin(current_user)
+    existing_program = await db.tv_programs.find_one({"id": program_id}, {"_id": 0})
+    if not existing_program:
+        raise HTTPException(status_code=404, detail="Programa de TV não encontrado")
+
+    video_id = extract_youtube_video_id(program_data.youtube_url)
+    program_dict = program_data.model_dump()
+    program_dict["youtube_video_id"] = video_id
+    program_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.tv_programs.update_one({"id": program_id}, {"$set": program_dict})
+    updated_program = await db.tv_programs.find_one({"id": program_id}, {"_id": 0})
+    return normalize_tv_program(updated_program)
+
+
+@api_router.delete("/admin/tv-programs/{program_id}")
+async def delete_tv_program(program_id: str, current_user: User = Depends(get_current_user)):
+    ensure_admin(current_user)
+    result = await db.tv_programs.delete_one({"id": program_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Programa de TV não encontrado")
+
+    return {"message": "Programa de TV excluído com sucesso"}
 
 # ============ COLUMNISTS ROUTES (Colunistas) ============
 
