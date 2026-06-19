@@ -6,17 +6,23 @@ const AdminAdvancedDashboard = ({ stats = {} }) => {
     totalColumns = 0,
     totalEvents = 0,
     totalEditions = 0,
+    totalBanners = 0,
+    activeBanners = 0,
     publishedPosts = 0,
     draftPosts = 0,
+    pendingComments = 0,
+    latestEditionTitle = '',
+    latestEditionNumber = null,
     recentActivity = []
   } = stats;
 
   const safePostTotal = totalPosts > 0 ? totalPosts : 1;
+  const maxEditorialTotal = Math.max(totalPosts, totalColumns, totalEvents, totalEditions, 1);
 
   const StatCard = ({ icon, title, value, color, trend }) => (
     <div className="enfoco-glass rounded-xl p-6 hover:shadow-premium transition-all duration-300">
       <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl ${color}`}>
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-xs font-bold tracking-[0.14em] ${color}`}>
           {icon}
         </div>
         {typeof trend === 'number' && (
@@ -44,7 +50,7 @@ const AdminAdvancedDashboard = ({ stats = {} }) => {
         <div
           className={`h-full rounded-full transition-all duration-300 ${color}`}
           style={{ width: `${Math.min((value / maxValue) * 100, 100)}%` }}
-        ></div>
+        />
       </div>
     </div>
   );
@@ -53,28 +59,28 @@ const AdminAdvancedDashboard = ({ stats = {} }) => {
     <div className="space-y-8">
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
-          icon="📰"
+          icon="REP"
           title="Total de Reportagens"
           value={totalPosts}
           color="bg-blue-100 text-blue-600"
           trend={12}
         />
         <StatCard
-          icon="✍️"
+          icon="COL"
           title="Total de Colunas"
           value={totalColumns}
           color="bg-purple-100 text-purple-600"
           trend={5}
         />
         <StatCard
-          icon="📅"
+          icon="EVT"
           title="Total de Eventos"
           value={totalEvents}
           color="bg-green-100 text-green-600"
           trend={-2}
         />
         <StatCard
-          icon="📑"
+          icon="REV"
           title="Total de Edições"
           value={totalEditions}
           color="bg-orange-100 text-orange-600"
@@ -112,27 +118,47 @@ const AdminAdvancedDashboard = ({ stats = {} }) => {
           <ChartBar
             label="Reportagens"
             value={totalPosts}
-            maxValue={Math.max(totalPosts, totalColumns, totalEvents, totalEditions, 1)}
+            maxValue={maxEditorialTotal}
             color="bg-blue-500"
           />
           <ChartBar
             label="Colunas"
             value={totalColumns}
-            maxValue={Math.max(totalPosts, totalColumns, totalEvents, totalEditions, 1)}
+            maxValue={maxEditorialTotal}
             color="bg-purple-500"
           />
           <ChartBar
             label="Eventos"
             value={totalEvents}
-            maxValue={Math.max(totalPosts, totalColumns, totalEvents, totalEditions, 1)}
+            maxValue={maxEditorialTotal}
             color="bg-green-500"
           />
           <ChartBar
             label="Edições"
             value={totalEditions}
-            maxValue={Math.max(totalPosts, totalColumns, totalEvents, totalEditions, 1)}
+            maxValue={maxEditorialTotal}
             color="bg-orange-500"
           />
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="enfoco-glass rounded-xl p-6 shadow-premium">
+          <p className="text-stone text-sm font-light mb-1">Banners ativos</p>
+          <p className="font-display text-3xl font-bold text-charcoal">{activeBanners}</p>
+          <p className="text-xs text-stone mt-2">de {totalBanners} cadastrados</p>
+        </div>
+        <div className="enfoco-glass rounded-xl p-6 shadow-premium">
+          <p className="text-stone text-sm font-light mb-1">Comentários pendentes</p>
+          <p className="font-display text-3xl font-bold text-charcoal">{pendingComments}</p>
+          <p className="text-xs text-stone mt-2">aguardando moderação</p>
+        </div>
+        <div className="enfoco-glass rounded-xl p-6 shadow-premium">
+          <p className="text-stone text-sm font-light mb-1">Última edição</p>
+          <p className="font-display text-2xl font-bold text-charcoal">
+            {latestEditionNumber ? `Edição ${latestEditionNumber}` : 'Sem edição'}
+          </p>
+          <p className="text-xs text-stone mt-2 line-clamp-1">{latestEditionTitle || 'Nenhuma edição publicada'}</p>
         </div>
       </div>
 

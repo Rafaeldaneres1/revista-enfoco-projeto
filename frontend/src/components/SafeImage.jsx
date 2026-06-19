@@ -20,18 +20,22 @@ const isCloudinaryImage = (value = '') =>
 
 const getCloudinaryTransformation = (width, variant) => {
   if (variant === 'avatar') {
-    return `f_auto,q_auto:best,c_thumb,g_face,w_${width},h_${width},dpr_auto`;
+    return `f_auto,q_auto:good,c_thumb,g_face,w_${width},h_${width},dpr_auto`;
   }
 
   if (variant === 'hero') {
-    return `f_auto,q_95,c_limit,w_${width}`;
+    return `f_auto,q_auto:good,c_limit,w_${width}`;
   }
 
   if (variant === 'article') {
-    return `f_auto,q_auto:best,c_limit,w_${width}`;
+    return `f_auto,q_auto:good,c_limit,w_${width}`;
   }
 
-  return `f_auto,q_auto,c_limit,w_${width}`;
+  if (variant === 'card') {
+    return `f_auto,q_auto:eco,c_limit,w_${width}`;
+  }
+
+  return `f_auto,q_auto:eco,c_limit,w_${width}`;
 };
 
 const buildCloudinaryUrl = (value, width, variant) => {

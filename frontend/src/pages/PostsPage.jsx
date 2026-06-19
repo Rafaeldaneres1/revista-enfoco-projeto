@@ -180,9 +180,9 @@ const PostsPage = () => {
         <div className="absolute inset-0 bg-charcoal"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.35),_transparent_45%),linear-gradient(135deg,_rgba(255,255,255,0.04),_transparent_55%)]"></div>
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24 sm:py-28 lg:py-36">
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36">
           <p className="label-premium text-white/70 mb-6">Leitura Recomendada</p>
-          <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-8 leading-[1.1] text-balance max-w-4xl">
+          <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-7 sm:mb-8 leading-[1.06] sm:leading-[1.1] text-balance max-w-4xl">
             Reportagens e
             <br />
             <em className="font-serif italic font-normal">Artigos</em>
@@ -191,7 +191,7 @@ const PostsPage = () => {
             <PublicSearchBar
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Pesquisar reportagens por titulo, autor ou categoria"
+              placeholder="Pesquisar reportagens por título, autor ou categoria"
               label="Pesquisar reportagens"
               containerClassName="w-full"
             />

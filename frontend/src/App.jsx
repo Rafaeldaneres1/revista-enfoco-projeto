@@ -21,6 +21,7 @@ const EventsPage = lazy(() => import('./pages/EventsPage'));
 const SingleEvent = lazy(() => import('./pages/SingleEvent'));
 const EditionsPage = lazy(() => import('./pages/EditionsPage'));
 const EditionReaderPage = lazy(() => import('./pages/EditionReaderPage'));
+const TVProgramsPage = lazy(() => import('./pages/TVProgramsPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
 
@@ -44,6 +45,8 @@ const AdminCategories = lazy(() => import('./pages/AdminCategories'));
 const AdminCategoryForm = lazy(() => import('./pages/AdminCategoryForm'));
 const AdminBanners = lazy(() => import('./pages/AdminBanners'));
 const AdminBannerForm = lazy(() => import('./pages/AdminBannerForm'));
+const AdminTVPrograms = lazy(() => import('./pages/AdminTVPrograms'));
+const AdminTVProgramForm = lazy(() => import('./pages/AdminTVProgramForm'));
 const AdminComments = lazy(() => import('./pages/AdminComments'));
 const AdminPrivacyForm = lazy(() => import('./pages/AdminPrivacyForm'));
 
@@ -95,6 +98,7 @@ function App() {
                 <Route path="/coluna/:slug" element={<LegacyColumnRedirect />} />
                 <Route path="/eventos" element={<EventsPage />} />
                 <Route path="/eventos/:slug" element={<SingleEvent />} />
+                <Route path="/programas-de-tv" element={<TVProgramsPage />} />
                 <Route path="/edicoes" element={<EditionsPage />} />
                 <Route path="/revista" element={<EditionsPage />} />
                 <Route path="/revista/:slug" element={<EditionReaderPage />} />
@@ -129,6 +133,9 @@ function App() {
                 <Route path="/admin/banners" element={<PrivateRoute><AdminBanners /></PrivateRoute>} />
                 <Route path="/admin/banners/new" element={<PrivateRoute><AdminBannerForm /></PrivateRoute>} />
                 <Route path="/admin/banners/edit/:id" element={<PrivateRoute><AdminBannerForm /></PrivateRoute>} />
+                <Route path="/admin/tv-programs" element={<PrivateRoute><AdminTVPrograms /></PrivateRoute>} />
+                <Route path="/admin/tv-programs/new" element={<PrivateRoute><AdminTVProgramForm /></PrivateRoute>} />
+                <Route path="/admin/tv-programs/edit/:id" element={<PrivateRoute><AdminTVProgramForm /></PrivateRoute>} />
                 <Route path="/admin/comments" element={<PrivateRoute><AdminComments /></PrivateRoute>} />
                 <Route path="/admin/privacy" element={<PrivateRoute><AdminPrivacyForm /></PrivateRoute>} />
               </Routes>

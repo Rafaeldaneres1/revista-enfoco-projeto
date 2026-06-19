@@ -117,16 +117,16 @@ const ColumnsPage = () => {
         <div className="absolute inset-0 bg-charcoal"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.35),_transparent_45%),linear-gradient(135deg,_rgba(255,255,255,0.04),_transparent_55%)]"></div>
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24 sm:py-28 lg:py-36">
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36">
           <p className="text-xs font-sans tracking-[0.25em] uppercase text-white/60 mb-4 font-semibold">
             Vozes Autorais
           </p>
-          <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight">
+          <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-[1.06] sm:leading-tight">
             Colunistas da
             <br />
             <em className="font-serif italic font-normal">Revista Enfoco</em>
           </h1>
-          <p className="text-base lg:text-lg text-white/78 max-w-2xl leading-relaxed mb-10">
+          <p className="text-sm sm:text-base lg:text-lg text-white/78 max-w-2xl leading-relaxed mb-8 sm:mb-10">
             Perfis autorais, especialistas e articulistas que ajudam a ampliar o debate público com leitura técnica e sensível.
           </p>
 

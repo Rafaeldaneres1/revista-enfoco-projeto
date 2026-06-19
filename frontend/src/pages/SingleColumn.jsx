@@ -14,19 +14,19 @@ import CommentSection from '../components/CommentSection';
 
 const normalizeText = (value = '') =>
   String(value)
-    .replaceAll('Ã¡', 'á')
-    .replaceAll('Ã ', 'à')
-    .replaceAll('Ã¢', 'â')
-    .replaceAll('Ã£', 'ã')
-    .replaceAll('Ã©', 'é')
-    .replaceAll('Ãª', 'ê')
-    .replaceAll('Ã­', 'í')
-    .replaceAll('Ã³', 'ó')
-    .replaceAll('Ã´', 'ô')
-    .replaceAll('Ãµ', 'õ')
-    .replaceAll('Ãº', 'ú')
-    .replaceAll('Ã§', 'ç')
-    .replaceAll('â€¢', '•');
+    .replaceAll('\u00c3\u00a1', '\u00e1')
+    .replaceAll('\u00c3\u00a0', '\u00e0')
+    .replaceAll('\u00c3\u00a2', '\u00e2')
+    .replaceAll('\u00c3\u00a3', '\u00e3')
+    .replaceAll('\u00c3\u00a9', '\u00e9')
+    .replaceAll('\u00c3\u00aa', '\u00ea')
+    .replaceAll('\u00c3\u00ad', '\u00ed')
+    .replaceAll('\u00c3\u00b3', '\u00f3')
+    .replaceAll('\u00c3\u00b4', '\u00f4')
+    .replaceAll('\u00c3\u00b5', '\u00f5')
+    .replaceAll('\u00c3\u00ba', '\u00fa')
+    .replaceAll('\u00c3\u00a7', '\u00e7')
+    .replaceAll('\u00e2\u20ac\u00a2', '\u2022');
 
 const SingleColumn = () => {
   const { slug } = useParams();
@@ -89,6 +89,10 @@ const SingleColumn = () => {
         canonicalPath={`/colunas/${column.slug}`}
         image={column.featured_image || column.author_image}
         type="article"
+        publishedTime={column.created_at}
+        modifiedTime={column.updated_at}
+        authorName={normalizeText(column.author_name)}
+        sectionName="Colunas"
       />
       {column.featured_image && (
         <ArticleHeroImage
@@ -99,12 +103,12 @@ const SingleColumn = () => {
         />
       )}
 
-      <div className="max-w-4xl mx-auto px-6 lg:px-8 -mt-32 relative z-10">
-        <div className="bg-white pt-12">
+      <div className={`max-w-4xl mx-auto px-5 sm:px-6 lg:px-8 relative z-10 ${column.featured_image ? '-mt-32' : 'pt-8 sm:pt-12'}`}>
+        <div className="bg-white pt-8 sm:pt-12">
           <div className="max-w-2xl mx-auto">
             <Link
               to="/colunas"
-              className="inline-flex items-center text-sm text-stone hover:text-charcoal mb-12 transition-colors uppercase tracking-wide"
+              className="inline-flex items-center text-sm text-stone hover:text-charcoal mb-8 sm:mb-12 transition-colors uppercase tracking-wide"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -112,17 +116,17 @@ const SingleColumn = () => {
               Voltar
             </Link>
 
-            <p className="text-xs font-sans tracking-[0.15em] uppercase text-royal-blue mb-6">
+            <p className="text-xs font-sans tracking-[0.15em] uppercase text-royal-blue mb-4 sm:mb-6">
               Coluna de opinião
             </p>
 
-            <h1 className="font-display text-5xl lg:text-6xl font-bold text-charcoal mb-8 leading-[1.1]">
+            <h1 className="font-display text-[2.05rem] sm:text-4xl md:text-5xl lg:text-6xl font-bold text-charcoal mb-5 sm:mb-8 leading-[1.06] sm:leading-[1.1] break-words">
               {normalizeText(column.title)}
             </h1>
 
-            <p className="text-xl text-stone mb-12 leading-relaxed">{normalizeText(column.excerpt)}</p>
+            <p className="text-base sm:text-lg md:text-xl text-stone mb-8 sm:mb-12 leading-relaxed">{normalizeText(column.excerpt)}</p>
 
-            <div className="flex items-center gap-4 pb-12 mb-12 border-b border-gray-200">
+            <div className="flex items-center gap-4 pb-8 sm:pb-12 mb-8 sm:mb-12 border-b border-gray-200">
               {column.author_image ? (
                 <SafeImage
                   src={column.author_image}

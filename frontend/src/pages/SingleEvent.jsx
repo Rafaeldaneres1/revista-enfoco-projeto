@@ -153,6 +153,9 @@ const SingleEvent = () => {
         canonicalPath={`/eventos/${event.slug}`}
         image={eventImages[0]}
         type="article"
+        publishedTime={event.event_date || event.created_at}
+        modifiedTime={event.updated_at}
+        sectionName="Eventos"
       />
       <div className="border-b border-gray-200 py-16">
         <div className="max-w-6xl mx-auto px-6 lg:px-8">
@@ -287,6 +290,7 @@ const SingleEvent = () => {
                   alt={`${event.title} - foto ${activeImageIndex + 1}`}
                   className="w-full h-auto object-contain bg-white"
                   cloudinaryVariant="article"
+                  sizes="(max-width: 768px) 100vw, 1100px"
                 />
               </button>
 
@@ -308,6 +312,8 @@ const SingleEvent = () => {
                         src={image}
                         alt={`${event.title} miniatura ${index + 1}`}
                         className="w-full aspect-[4/5] object-cover"
+                        cloudinaryVariant="card"
+                        sizes="(max-width: 768px) 33vw, (max-width: 1024px) 20vw, 160px"
                       />
                     </button>
                   ))}
@@ -376,6 +382,7 @@ const SingleEvent = () => {
               loading="eager"
               decoding="async"
               cloudinaryVariant="article"
+              sizes="100vw"
             />
             <div className="rounded-full bg-white/10 px-4 py-2 text-sm text-white/85 backdrop-blur-sm">
               {activeImageIndex + 1} / {eventImages.length}

@@ -127,6 +127,10 @@ const SinglePost = () => {
         canonicalPath={`/noticias/${post.slug}`}
         image={post.featured_image}
         type="article"
+        publishedTime={post.created_at}
+        modifiedTime={post.updated_at}
+        authorName={post.author_name || 'Redação Enfoco'}
+        sectionName={post.category}
       />
       <ReadingProgress />
 

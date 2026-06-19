@@ -7,24 +7,27 @@ import SafeImage from '../components/SafeImage';
 import SeoHelmet from '../components/SeoHelmet';
 import ShareActions from '../components/ShareActions';
 
+const TEXT_FIXES = [
+  ['\u00c3\u00a1', '\u00e1'],
+  ['\u00c3\u00a0', '\u00e0'],
+  ['\u00c3\u00a2', '\u00e2'],
+  ['\u00c3\u00a3', '\u00e3'],
+  ['\u00c3\u00a9', '\u00e9'],
+  ['\u00c3\u00aa', '\u00ea'],
+  ['\u00c3\u00ad', '\u00ed'],
+  ['\u00c3\u00b3', '\u00f3'],
+  ['\u00c3\u00b4', '\u00f4'],
+  ['\u00c3\u00b5', '\u00f5'],
+  ['\u00c3\u00ba', '\u00fa'],
+  ['\u00c3\u00a7', '\u00e7'],
+  ['\u00c3\u2030', '\u00c9'],
+  ['\u00c3\u201c', '\u00d3'],
+  ['\u00c3\u0161', '\u00da'],
+  ['\u00e2\u20ac\u00a2', '\u2022'],
+];
+
 const sanitizeText = (value = '') =>
-  value
-    .replaceAll('ÃƒÆ’Ã‚Â¡', 'ÃƒÂ¡')
-    .replaceAll('ÃƒÆ’Ã‚Â ', 'ÃƒÂ ')
-    .replaceAll('ÃƒÆ’Ã‚Â¢', 'ÃƒÂ¢')
-    .replaceAll('ÃƒÆ’Ã‚Â£', 'ÃƒÂ£')
-    .replaceAll('ÃƒÆ’Ã‚Â©', 'ÃƒÂ©')
-    .replaceAll('ÃƒÆ’Ã‚Âª', 'ÃƒÂª')
-    .replaceAll('ÃƒÆ’Ã‚Â­', 'ÃƒÂ­')
-    .replaceAll('ÃƒÆ’Ã‚Â³', 'ÃƒÂ³')
-    .replaceAll('ÃƒÆ’Ã‚Â´', 'ÃƒÂ´')
-    .replaceAll('ÃƒÆ’Ã‚Âµ', 'ÃƒÂµ')
-    .replaceAll('ÃƒÆ’Ã‚Âº', 'ÃƒÂº')
-    .replaceAll('ÃƒÆ’Ã‚Â§', 'ÃƒÂ§')
-    .replaceAll('ÃƒÆ’Ã¢â‚¬Â°', 'Ãƒâ€°')
-    .replaceAll('ÃƒÆ’Ã¢â‚¬Å“', 'Ãƒâ€œ')
-    .replaceAll('ÃƒÆ’Ã…Â¡', 'ÃƒÅ¡')
-    .replaceAll('ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢', 'Ã¢â‚¬Â¢');
+  TEXT_FIXES.reduce((text, [broken, fixed]) => text.replaceAll(broken, fixed), String(value));
 
 const getEditionPreviewPages = (edition) => {
   if (edition?.preview_pages?.length) {
@@ -56,7 +59,7 @@ const getEditionExternalUrl = (edition) => {
 
 const getEditionExternalLabel = (edition) =>
   edition?.heyzine_url || /heyzine\.com/i.test(edition?.pdf_url || '')
-    ? 'Abrir Revista no Heyzine'
+    ? 'Abrir revista'
     : 'Abrir PDF em nova aba';
 
 const EditionReaderPage = () => {
@@ -170,6 +173,11 @@ const EditionReaderPage = () => {
         description={sanitizeText(edition.description || 'Leitura da edição da Revista Enfoco.')}
         canonicalPath={`/revista/${edition.slug}`}
         image={edition.cover_image || pageImages[0]}
+        type="article"
+        publishedTime={edition.created_at || edition.publication_date}
+        modifiedTime={edition.updated_at}
+        authorName="Revista Enfoco"
+        sectionName="Revista"
       />
       <div className="border-b border-gray-200 py-20 bg-porcelain">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">

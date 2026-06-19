@@ -20,8 +20,8 @@ const Header = () => {
     }
 
     let isMounted = true;
-
     const cachedLatestEditionPath = readPublicCache(LATEST_EDITION_CACHE_KEY);
+
     if (typeof cachedLatestEditionPath === 'string' && cachedLatestEditionPath) {
       setLatestEditionPath(cachedLatestEditionPath);
     }
@@ -68,6 +68,7 @@ const Header = () => {
     { name: 'Reportagens', path: '/noticias' },
     { name: 'Colunas', path: '/colunas' },
     { name: 'Eventos', path: '/eventos' },
+    { name: 'Programas de TV', path: '/programas-de-tv' },
     { name: 'Revista', path: '/revista' },
     { name: 'Quem Somos', path: '/quem-somos' }
   ];
@@ -87,31 +88,31 @@ const Header = () => {
             <Logo animationKey={location.pathname} />
           </Link>
 
-          <div className="hidden md:flex items-center gap-8 lg:gap-10">
-            <ul className="flex items-center space-x-10 lg:space-x-12">
-            {navItems.map((item) => (
-              <li key={item.path}>
-                <Link
-                  to={item.path}
-                  onMouseEnter={() => warmRoute(item.path)}
-                  onFocus={() => warmRoute(item.path)}
-                  className={`text-sm font-medium tracking-[0.08em] uppercase transition-all duration-300 ease-out relative group ${
-                    isActive(item.path) ? 'text-royal-blue' : 'text-charcoal hover:text-royal-blue'
-                  }`}
-                >
-                  {item.name}
-                  <span
-                    className={`absolute -bottom-1 left-0 h-0.5 bg-royal-blue transition-all duration-300 group-hover:w-full ${
-                      isActive(item.path) ? 'w-full' : 'w-0'
+          <div className="hidden md:flex items-center gap-5 lg:gap-7">
+            <ul className="flex items-center space-x-5 lg:space-x-8">
+              {navItems.map((item) => (
+                <li key={item.path}>
+                  <Link
+                    to={item.path}
+                    onMouseEnter={() => warmRoute(item.path)}
+                    onFocus={() => warmRoute(item.path)}
+                    className={`text-sm font-medium tracking-[0.08em] uppercase whitespace-nowrap transition-all duration-300 ease-out relative group ${
+                      isActive(item.path) ? 'text-royal-blue' : 'text-charcoal hover:text-royal-blue'
                     }`}
-                  ></span>
-                </Link>
-              </li>
-            ))}
+                  >
+                    {item.name}
+                    <span
+                      className={`absolute -bottom-1 left-0 h-0.5 bg-royal-blue transition-all duration-300 group-hover:w-full ${
+                        isActive(item.path) ? 'w-full' : 'w-0'
+                      }`}
+                    ></span>
+                  </Link>
+                </li>
+              ))}
             </ul>
             <Link
               to={latestEditionPath}
-              className="inline-flex items-center justify-center bg-royal-blue text-white px-5 py-4 text-xs font-bold uppercase tracking-[0.16em] shadow-premium hover:bg-blue-700 transition-all duration-300 whitespace-nowrap"
+              className="inline-flex items-center justify-center bg-royal-blue text-white px-4 lg:px-5 py-4 text-xs font-bold uppercase tracking-[0.16em] shadow-premium hover:bg-blue-700 transition-all duration-300 whitespace-nowrap"
             >
               Leia a última edição
             </Link>
@@ -135,15 +136,15 @@ const Header = () => {
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-4 animate-slide-down">
-            <ul className="space-y-2">
+          <div className="md:hidden border-t border-gray-200 py-3 animate-slide-down">
+            <ul className="space-y-1">
               {navItems.map((item) => (
                 <li key={item.path}>
                   <Link
                     to={item.path}
                     onTouchStart={() => warmRoute(item.path)}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-4 py-3 text-sm font-medium tracking-[0.08em] uppercase transition-all duration-300 ${
+                    className={`block px-4 py-3.5 text-sm font-medium tracking-[0.08em] uppercase transition-all duration-300 ${
                       isActive(item.path)
                         ? 'text-royal-blue bg-blue-50/50'
                         : 'text-charcoal hover:text-royal-blue hover:bg-gray-50/50'

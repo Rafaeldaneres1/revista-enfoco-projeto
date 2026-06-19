@@ -60,22 +60,38 @@ const AdminDashboard = () => {
     totalColumns: 0,
     totalEvents: 0,
     totalEditions: 0,
+    totalBanners: 0,
+    activeBanners: 0,
+    totalTVPrograms: 0,
+    activeTVPrograms: 0,
     publishedPosts: 0,
     draftPosts: 0,
     pendingComments: 0,
+    latestEditionTitle: '',
+    latestEditionNumber: null,
     recentActivity: []
   });
 
   React.useEffect(() => {
     const loadStats = async () => {
       try {
-        const [postsResponse, columnsResponse, eventsResponse, editionsResponse, commentsResponse] =
+        const [
+          postsResponse,
+          columnsResponse,
+          eventsResponse,
+          editionsResponse,
+          commentsResponse,
+          bannersResponse,
+          tvProgramsResponse
+        ] =
           await Promise.all([
             axios.get(apiUrl('/api/posts')),
             axios.get(apiUrl('/api/columns')),
             axios.get(apiUrl('/api/events')),
             axios.get(apiUrl('/api/editions')),
-            axios.get(apiUrl('/api/admin/comments?status=pending&limit=200'), { headers: {} })
+            axios.get(apiUrl('/api/admin/comments?status=pending&limit=200'), { headers: {} }),
+            axios.get(apiUrl('/api/admin/banners')),
+            axios.get(apiUrl('/api/admin/tv-programs'), { headers: {} })
           ]);
 
         const posts = Array.isArray(postsResponse.data) ? postsResponse.data : [];
@@ -83,15 +99,25 @@ const AdminDashboard = () => {
         const events = Array.isArray(eventsResponse.data) ? eventsResponse.data : [];
         const editions = Array.isArray(editionsResponse.data) ? editionsResponse.data : [];
         const comments = Array.isArray(commentsResponse.data) ? commentsResponse.data : [];
+        const banners = Array.isArray(bannersResponse.data) ? bannersResponse.data : [];
+        const tvPrograms = Array.isArray(tvProgramsResponse.data) ? tvProgramsResponse.data : [];
+        const publishedEditions = editions.filter((item) => item.published);
+        const latestEdition = publishedEditions[0] || editions[0] || null;
 
         setStats({
           totalPosts: posts.length,
           totalColumns: columns.length,
           totalEvents: events.length,
           totalEditions: editions.length,
+          totalBanners: banners.length,
+          activeBanners: banners.filter((item) => item.active).length,
+          totalTVPrograms: tvPrograms.length,
+          activeTVPrograms: tvPrograms.filter((item) => item.active).length,
           publishedPosts: posts.filter((item) => item.published).length,
           draftPosts: posts.filter((item) => !item.published).length,
           pendingComments: comments.length,
+          latestEditionTitle: latestEdition?.title || '',
+          latestEditionNumber: latestEdition?.edition_number || latestEdition?.number || null,
           recentActivity: buildRecentActivity({ posts, columns, events, editions })
         });
       } catch (error) {
@@ -158,10 +184,21 @@ const AdminDashboard = () => {
     },
     {
       title: 'Banners',
-      description: 'Gerenciar banners de publicidade',
+      description: stats.totalBanners > 0
+        ? `${stats.activeBanners} ativos de ${stats.totalBanners}`
+        : 'Gerenciar banners de publicidade',
       to: '/admin/banners',
       icon: 'AD',
       color: 'from-cyan-50 to-cyan-100'
+    },
+    {
+      title: 'Programas de TV',
+      description: stats.totalTVPrograms > 0
+        ? `${stats.activeTVPrograms} ativos de ${stats.totalTVPrograms}`
+        : 'Gerenciar links do YouTube',
+      to: '/admin/tv-programs',
+      icon: 'TV',
+      color: 'from-pink-50 to-pink-100'
     },
     {
       title: 'Comentários',
@@ -266,7 +303,7 @@ const AdminDashboard = () => {
         <div className="space-y-10">
           <div>
             <h2 className="font-display text-3xl font-bold text-charcoal mb-6">Gerenciar Conteúdo</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-5">
+            <div className="grid md:grid-cols-2 lg:grid-cols-6 gap-5">
               {contentCards.map((card) => (
                 <Link
                   key={card.to}

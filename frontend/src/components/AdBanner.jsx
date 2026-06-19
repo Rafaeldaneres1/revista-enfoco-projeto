@@ -5,9 +5,9 @@ import { readPublicCache, writePublicCache } from '../lib/publicDataCache';
 import SafeImage from './SafeImage';
 
 const bannerCache = new Map();
-const getBannerCacheKey = (position) => `ad-banner:${position}:v1`;
+const getBannerCacheKey = (position) => `ad-banner:${position}:v2`;
 
-const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx-auto px-6 lg:px-8' }) => {
+const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8' }) => {
   const [banner, setBanner] = useState(() => {
     if (bannerCache.has(position)) {
       return bannerCache.get(position);
@@ -71,9 +71,9 @@ const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx
       }
 
       if ('requestIdleCallback' in window) {
-        idleId = window.requestIdleCallback(fetchBanner, { timeout: 2500 });
+        idleId = window.requestIdleCallback(fetchBanner, { timeout: 1800 });
       } else {
-        timeoutId = window.setTimeout(fetchBanner, 900);
+        timeoutId = window.setTimeout(fetchBanner, 500);
       }
     };
 
@@ -94,16 +94,30 @@ const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx
     return null;
   }
 
+  const hasMobileImage = Boolean(banner.mobile_image);
   const image = (
-    <SafeImage
-      src={banner.image}
-      alt={banner.title || 'Publicidade'}
-      className="block w-full max-h-[280px] object-contain"
-      loading="lazy"
-      decoding="async"
-      sizes="(min-width: 1280px) 1180px, calc(100vw - 48px)"
-      cloudinaryVariant="article"
-    />
+    <>
+      {hasMobileImage ? (
+        <SafeImage
+          src={banner.mobile_image}
+          alt={banner.title || 'Publicidade'}
+          className="block w-full max-h-[240px] object-contain sm:hidden"
+          loading="lazy"
+          decoding="async"
+          sizes="calc(100vw - 32px)"
+          cloudinaryVariant="article"
+        />
+      ) : null}
+      <SafeImage
+        src={banner.image}
+        alt={banner.title || 'Publicidade'}
+        className={`${hasMobileImage ? 'hidden sm:block' : 'block'} w-full max-h-[160px] object-contain sm:max-h-[220px] lg:max-h-[280px]`}
+        loading="lazy"
+        decoding="async"
+        sizes="(min-width: 1280px) 1180px, calc(100vw - 48px)"
+        cloudinaryVariant="article"
+      />
+    </>
   );
 
   return (

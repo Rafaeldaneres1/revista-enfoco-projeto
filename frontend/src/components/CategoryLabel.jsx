@@ -8,7 +8,24 @@ let cachedCategories = [];
 let pendingCategoriesRequest = null;
 
 const DEFAULT_CATEGORY_COLOR = '#2563EB';
-const CATEGORY_CACHE_KEY = 'category-catalog-v2';
+const CATEGORY_CACHE_KEY = 'category-catalog-v3';
+
+const FALLBACK_CATEGORY_COLORS = {
+  'casa-e-conforto': '#8B5E34',
+  cultura: '#D97706',
+  educacao: '#7C3AED',
+  esporte: '#16A34A',
+  empreendedorismo: '#2563EB',
+  economia: '#0891B2',
+  'lazer-e-turismo': '#EA580C',
+  'meio-ambiente': '#65A30D',
+  moda: '#DB2777',
+  'moda-e-estilo': '#DB2777',
+  personalidades: '#C2410C',
+  saude: '#059669',
+  'saude-e-bem-estar': '#059669',
+  tecnologia: '#0EA5E9'
+};
 
 const normalizeCategoryKey = (value = '') =>
   normalizeEditorialText(value).trim().toLowerCase();
@@ -88,6 +105,8 @@ export const useCategoryCatalog = () => {
 
 export const getCategoryMeta = (postCategory, categories = [], options = {}) => {
   const { categoryId, categorySlug } = options;
+  const normalizedPostCategory = normalizeCategoryKey(postCategory);
+  const normalizedSlug = normalizeCategoryKey(categorySlug);
 
   const matchedCategory = categories.find((item) => {
     if (categoryId && item?.id === categoryId) {
@@ -102,13 +121,20 @@ export const getCategoryMeta = (postCategory, categories = [], options = {}) => 
     return names.includes(normalizeCategoryKey(postCategory));
   });
 
+  const fallbackColor =
+    FALLBACK_CATEGORY_COLORS[normalizeCategoryKey(matchedCategory?.slug)] ||
+    FALLBACK_CATEGORY_COLORS[normalizeCategoryKey(matchedCategory?.name)] ||
+    FALLBACK_CATEGORY_COLORS[normalizedSlug] ||
+    FALLBACK_CATEGORY_COLORS[normalizedPostCategory] ||
+    DEFAULT_CATEGORY_COLOR;
+
   return {
     key:
       matchedCategory?.id ||
       matchedCategory?.slug ||
       normalizeCategoryKey(postCategory),
     label: normalizeEditorialText(matchedCategory?.name || postCategory || ''),
-    color: matchedCategory?.color || DEFAULT_CATEGORY_COLOR
+    color: matchedCategory?.color || fallbackColor
   };
 };
 

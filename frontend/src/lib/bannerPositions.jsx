@@ -24,6 +24,10 @@ export const BANNER_POSITIONS = [
     label: 'Revista: abaixo do cabeçalho'
   },
   {
+    value: 'tv_programs_top',
+    label: 'Programas de TV: topo da página'
+  },
+  {
     value: 'article_middle',
     label: 'Matérias/Colunas internas: meio do conteúdo'
   },

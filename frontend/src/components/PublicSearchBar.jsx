@@ -6,19 +6,19 @@ const PublicSearchBar = ({
   onChange,
   placeholder,
   label = 'Pesquisar',
-  containerClassName = 'max-w-7xl mx-auto px-6 lg:px-8'
+  containerClassName = 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
 }) => (
   <div className={containerClassName}>
     <label className="block">
       <span className="sr-only">{label}</span>
       <div className="relative">
-        <Search className="absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone" strokeWidth={1.8} />
+        <Search className="absolute left-4 sm:left-5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone" strokeWidth={1.8} />
         <input
           type="search"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-none border border-gray-200 bg-white py-4 pl-12 pr-12 text-sm text-charcoal shadow-premium-sm outline-none transition-all duration-200 placeholder:text-stone/70 focus:border-royal-blue focus:ring-2 focus:ring-royal-blue/10"
+          className="w-full rounded-none border border-gray-200 bg-white py-3.5 sm:py-4 pl-11 sm:pl-12 pr-11 sm:pr-12 text-sm text-charcoal shadow-premium-sm outline-none transition-all duration-200 placeholder:text-stone/70 focus:border-royal-blue focus:ring-2 focus:ring-royal-blue/10"
         />
         {value ? (
           <button

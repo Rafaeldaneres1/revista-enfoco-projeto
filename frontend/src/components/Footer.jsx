@@ -232,6 +232,11 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
+                <Link to="/programas-de-tv" className="text-white/70 hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block">
+                  Programas de TV
+                </Link>
+              </li>
+              <li>
                 <Link to="/revista" className="text-white/70 hover:text-white transition-colors duration-300 hover:translate-x-1 inline-block">
                   Revista
                 </Link>
@@ -356,13 +361,15 @@ const Footer = () => {
                 aria-label="Desenvolvido por Nodix"
                 className="inline-flex items-center gap-2 text-white/65 hover:text-white transition-colors duration-200"
               >
-                <img
-                  src="/assets/nodix-icon.png"
-                  alt=""
-                  className="block h-[18px] w-[18px] object-contain bg-transparent"
-                  aria-hidden="true"
-                  draggable="false"
-                />
+                  <img
+                    src="/assets/nodix-icon.webp"
+                    alt=""
+                    width="18"
+                    height="18"
+                    className="block h-[18px] w-[18px] object-contain bg-transparent"
+                    aria-hidden="true"
+                    draggable="false"
+                  />
                 <span>Desenvolvido por Nodix</span>
               </a>
             </div>

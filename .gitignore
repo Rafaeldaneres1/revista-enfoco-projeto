@@ -1,19 +1,38 @@
-frontend/node_modules/
-frontend/build/
-frontend/.npm-cache/
-frontend/.vercel/
+# Ambientes e Segredos
+.env
+.env.local
+.env.production
+backend/.env
 frontend/.env
-frontend/.env.production
+frontend/.env.local
+
+# Builds e Caches
+frontend/dist/
+frontend/build/
+frontend/.vercel/
+frontend/.npm-cache/
+**/node_modules/
+
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+
+# Pastas de Debug/Temporárias
+frontend/tmp-editor-check/
+tmp-editor-check/
+
+# Uploads
+backend/uploads/
+
+# Sistema
+**/.DS_Store
+Thumbs.db
+
+# Logs
 frontend/frontend.log
 frontend/frontend-error.log
-backend/__pycache__/
-backend/uploads/
-backend/.env
-backend/.venv/
 backend/backend.log
 backend/backend-error.log
 backend/localtunnel.log
 backend/localtunnel.err
-scripts/__pycache__/
-.DS_Store
-Thumbs.db

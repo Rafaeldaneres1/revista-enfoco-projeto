@@ -13,6 +13,35 @@ import { readPublicCache, writePublicCache } from '../lib/publicDataCache';
 const EVENTS_CACHE_KEY = 'events-index-v2';
 const EVENTS_PAGE_SIZE = 24;
 
+const parseEventTimestamp = (value) => {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) {
+    return 0;
+  }
+
+  const directTimestamp = Date.parse(rawValue);
+  if (!Number.isNaN(directTimestamp)) {
+    return directTimestamp;
+  }
+
+  const brDate = rawValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (brDate) {
+    return new Date(Number(brDate[3]), Number(brDate[2]) - 1, Number(brDate[1])).getTime();
+  }
+
+  return 0;
+};
+
+const getEventTimestamp = (event) =>
+  Math.max(
+    parseEventTimestamp(event?.event_date),
+    parseEventTimestamp(event?.date),
+    parseEventTimestamp(event?.created_at)
+  );
+
+const sortEventsNewestFirst = (items = []) =>
+  [...items].sort((a, b) => getEventTimestamp(b) - getEventTimestamp(a));
+
 const splitDescription = (value) => {
   if (!value) {
     return '';
@@ -43,7 +72,7 @@ const EventsPage = () => {
         if (!append) {
           const cachedEvents = readPublicCache(EVENTS_CACHE_KEY);
           if (Array.isArray(cachedEvents)) {
-            setEvents(cachedEvents);
+            setEvents(sortEventsNewestFirst(cachedEvents));
             setLoading(false);
           }
         }
@@ -57,10 +86,11 @@ const EventsPage = () => {
             (event, index, list) =>
               list.findIndex((candidate) => (candidate.id || candidate.slug) === (event.id || event.slug)) === index
           );
+          const sortedEvents = sortEventsNewestFirst(uniqueEvents);
           if (!append) {
-            writePublicCache(EVENTS_CACHE_KEY, uniqueEvents);
+            writePublicCache(EVENTS_CACHE_KEY, sortedEvents);
           }
-          return uniqueEvents;
+          return sortedEvents;
         });
       } catch (error) {
         console.error('Error fetching events:', error);
@@ -74,20 +104,22 @@ const EventsPage = () => {
     fetchEvents();
   }, [fetchEvents]);
 
-  const filteredEvents = events.filter((event) =>
-    matchesSearch(
-      event,
-      [
-        (item) => item.title,
-        (item) => item.description,
-        (item) => item.location,
-        (item) => item.event_date ? new Date(item.event_date).toLocaleDateString('pt-BR') : ''
-      ],
-      searchQuery
+  const filteredEvents = sortEventsNewestFirst(
+    events.filter((event) =>
+      matchesSearch(
+        event,
+        [
+          (item) => item.title,
+          (item) => item.description,
+          (item) => item.location,
+          (item) => item.event_date ? new Date(item.event_date).toLocaleDateString('pt-BR') : ''
+        ],
+        searchQuery
+      )
     )
   );
-  const upcomingEvents = filteredEvents.filter((event) => new Date(event.event_date) >= new Date());
-  const pastEvents = filteredEvents.filter((event) => new Date(event.event_date) < new Date());
+  const upcomingEvents = sortEventsNewestFirst(filteredEvents.filter((event) => new Date(event.event_date) >= new Date()));
+  const pastEvents = sortEventsNewestFirst(filteredEvents.filter((event) => new Date(event.event_date) < new Date()));
 
   return (
     <div className="min-h-screen bg-white">
@@ -101,21 +133,21 @@ const EventsPage = () => {
         <div className="absolute inset-0 bg-charcoal"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.35),_transparent_45%),linear-gradient(135deg,_rgba(255,255,255,0.04),_transparent_55%)]"></div>
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24 sm:py-28 lg:py-36">
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36">
           <p className="text-xs font-sans tracking-[0.2em] uppercase text-white/60 mb-4">Agenda Cultural</p>
-          <h1 className="font-display text-6xl lg:text-7xl font-bold text-white mb-6">
+          <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-6 leading-[1.06] sm:leading-tight">
             Eventos e
             <br />
             <em className="font-serif italic font-normal">Experiencias</em>
           </h1>
-          <p className="text-lg text-white/78 max-w-2xl mb-10">
+          <p className="text-sm sm:text-lg text-white/78 max-w-2xl mb-8 sm:mb-10 leading-relaxed">
             Agenda preparada para divulgar encontros, lançamentos, experiências e ações ligadas à Revista Enfoco.
           </p>
 
           <PublicSearchBar
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Pesquisar eventos por titulo, local ou data"
+            placeholder="Pesquisar eventos por título, local ou data"
             label="Pesquisar eventos"
           />
         </div>

@@ -14,6 +14,7 @@ const AdminBannerForm = () => {
   const [formData, setFormData] = useState({
     title: '',
     image: '',
+    mobile_image: '',
     link_url: '',
     active: true,
     display_order: 0,
@@ -41,6 +42,7 @@ const AdminBannerForm = () => {
         setFormData({
           title: banner.title || '',
           image: banner.image || '',
+          mobile_image: banner.mobile_image || '',
           link_url: banner.link_url || '',
           active: banner.active ?? true,
           display_order: Number(banner.display_order || 0),
@@ -92,6 +94,7 @@ const AdminBannerForm = () => {
       ...formData,
       title: formData.title.trim(),
       image: formData.image.trim(),
+      mobile_image: formData.mobile_image.trim() || null,
       link_url: formData.link_url.trim() || null,
       display_order: Number(formData.display_order || 0)
     };
@@ -153,7 +156,16 @@ const AdminBannerForm = () => {
               onChange={(value) => setFormData({ ...formData, image: value })}
               token={token}
               placeholder="/uploads/banner-publicidade.jpg"
-              helperText="Use uma peça horizontal larga. Como esta primeira versão usa uma imagem só, evite textos pequenos para mobile."
+              helperText="Use uma peça horizontal larga para desktop, como 1200x250 ou 1400x300."
+            />
+
+            <AdminImageField
+              label="Imagem mobile opcional"
+              value={formData.mobile_image}
+              onChange={(value) => setFormData({ ...formData, mobile_image: value })}
+              token={token}
+              placeholder="/uploads/banner-publicidade-mobile.jpg"
+              helperText="Use uma peça própria para celular, como 1080x1080 ou 1080x1350, com texto grande e legível."
             />
 
             <div>

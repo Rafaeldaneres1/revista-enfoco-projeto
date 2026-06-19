@@ -44,12 +44,12 @@ const ColumnistCard = ({ columnist, compact = false, priority = false }) => {
           )}
         </div>
 
-        <div className="p-6 flex flex-col flex-1">
+        <div className="p-6 flex flex-col flex-1 min-h-[280px]">
           <p className="text-[11px] font-sans tracking-[0.18em] uppercase text-royal-blue font-semibold mb-4">
             Colunista
           </p>
 
-          <h3 className="font-display text-2xl font-bold text-charcoal leading-[1.1] mb-3 group-hover:text-royal-blue transition-colors duration-300">
+          <h3 className="font-display text-xl sm:text-2xl font-bold text-charcoal leading-[1.1] mb-3 group-hover:text-royal-blue transition-colors duration-300 line-clamp-2 min-h-[3rem] sm:min-h-[3.3rem]">
             {name}
           </h3>
 
@@ -58,7 +58,7 @@ const ColumnistCard = ({ columnist, compact = false, priority = false }) => {
           </p>
 
           {bio ? (
-            <p className={`text-sm text-stone leading-relaxed ${compact ? 'line-clamp-3' : 'line-clamp-4'} mb-6 flex-1`}>
+            <p className={`text-sm text-stone leading-relaxed ${compact ? 'line-clamp-3' : 'line-clamp-4'} mb-6 flex-1 min-h-[4.5rem]`}>
               {bio}
             </p>
           ) : (

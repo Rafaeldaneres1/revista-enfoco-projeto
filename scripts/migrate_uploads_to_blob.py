@@ -13,6 +13,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 BACKEND_DIR = ROOT_DIR / "backend"
 UPLOADS_DIR = BACKEND_DIR / "uploads"
 ENV_FILE = BACKEND_DIR / ".env"
+SKIPPED_EXTENSIONS = {".pdf"}
 
 
 def normalize_slashes(value: str) -> str:
@@ -34,7 +35,13 @@ def replace_values(payload: Any, replacements: dict[str, str]) -> Any:
     if isinstance(payload, list):
         return [replace_values(item, replacements) for item in payload]
     if isinstance(payload, str):
-        return replacements.get(payload, payload)
+        if payload in replacements:
+            return replacements[payload]
+        updated = payload
+        for source, target in replacements.items():
+            if source in updated:
+                updated = updated.replace(source, target)
+        return updated
     return payload
 
 
@@ -54,7 +61,7 @@ def login(base_url: str, email: str, password: str) -> str:
 
 
 def upload_file(base_url: str, access_token: str, file_path: Path) -> str:
-    route = "/api/media/upload-pdf" if file_path.suffix.lower() == ".pdf" else "/api/media/upload"
+    route = "/api/media/upload"
     content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
 
     with file_path.open("rb") as handle:
@@ -65,7 +72,8 @@ def upload_file(base_url: str, access_token: str, file_path: Path) -> str:
             timeout=900,
         )
 
-    response.raise_for_status()
+    if not response.ok:
+        raise RuntimeError(f"Upload failed for {file_path}: {response.status_code} {response.text}")
     payload = response.json()
     url = payload.get("url")
     if not url:
@@ -79,20 +87,27 @@ async def migrate_uploads(
     backend_url: str,
     admin_email: str,
     admin_password: str,
-) -> tuple[int, int]:
+) -> tuple[int, int, list[str]]:
     mongo = MongoClient(mongo_url)
     db = mongo[db_name]
     access_token = login(backend_url, admin_email, admin_password)
 
     replacements: dict[str, str] = {}
     uploaded_count = 0
+    failures: list[str] = []
 
     for file_path in UPLOADS_DIR.rglob("*"):
         if not file_path.is_file():
             continue
+        if file_path.suffix.lower() in SKIPPED_EXTENSIONS:
+            continue
 
         relative_path = normalize_slashes(file_path.relative_to(UPLOADS_DIR).as_posix())
-        uploaded_url = upload_file(backend_url, access_token, file_path)
+        try:
+            uploaded_url = upload_file(backend_url, access_token, file_path)
+        except Exception as error:
+            failures.append(str(error))
+            continue
         uploaded_count += 1
 
         for candidate in build_reference_candidates(relative_path, backend_url):
@@ -114,7 +129,7 @@ async def migrate_uploads(
             updated_documents += 1
 
     mongo.close()
-    return uploaded_count, updated_documents
+    return uploaded_count, updated_documents, failures
 
 
 async def main() -> None:
@@ -147,7 +162,7 @@ async def main() -> None:
     if not UPLOADS_DIR.exists():
         raise SystemExit(f"Pasta de uploads não encontrada: {UPLOADS_DIR}")
 
-    uploaded_count, updated_documents = await migrate_uploads(
+    uploaded_count, updated_documents, failures = await migrate_uploads(
         mongo_url=args.mongo_url,
         db_name=args.db_name,
         backend_url=args.backend_url,
@@ -157,6 +172,9 @@ async def main() -> None:
 
     print(f"Arquivos enviados ao backend online: {uploaded_count}")
     print(f"Documentos atualizados no MongoDB: {updated_documents}")
+    print(f"Falhas de upload: {len(failures)}")
+    for failure in failures[:20]:
+        print(failure)
 
 
 if __name__ == "__main__":

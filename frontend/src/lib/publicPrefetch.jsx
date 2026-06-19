@@ -15,6 +15,10 @@ export const PUBLIC_PREFETCH_ROUTES = {
     cacheKey: 'events-index-v2',
     endpoint: '/api/events?published=true&compact=true&limit=24&skip=0'
   },
+  '/programas-de-tv': {
+    cacheKey: 'tv-programs-index-v1',
+    endpoint: '/api/tv-programs'
+  },
   '/revista': {
     cacheKey: 'editions-index-v2',
     endpoint: '/api/editions?published=true&compact=true&limit=24&skip=0'
@@ -66,14 +70,14 @@ export const prefetchPublicRoutesOnIdle = (paths = Object.keys(PUBLIC_PREFETCH_R
         if (!cancelled) {
           prefetchPublicRoute(path);
         }
-      }, index * 350);
+      }, index * 140);
     });
   };
 
   const idleId =
     'requestIdleCallback' in window
-      ? window.requestIdleCallback(run, { timeout: 3000 })
-      : window.setTimeout(run, 1200);
+      ? window.requestIdleCallback(run, { timeout: 1200 })
+      : window.setTimeout(run, 450);
 
   return () => {
     cancelled = true;

@@ -58,7 +58,7 @@ const getEditionExternalUrl = (edition) => {
 };
 
 const getEditionExternalLabel = (edition) =>
-  edition?.heyzine_url || /heyzine\.com/i.test(edition?.pdf_url || '') ? 'Abrir Heyzine' : 'Abrir PDF';
+  edition?.heyzine_url || /heyzine\.com/i.test(edition?.pdf_url || '') ? 'Abrir revista' : 'Abrir PDF';
 
 const EditionsPage = () => {
   const [editions, setEditions] = useState([]);
@@ -141,14 +141,14 @@ const EditionsPage = () => {
         <div className="absolute inset-0 bg-charcoal"></div>
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.35),_transparent_45%),linear-gradient(135deg,_rgba(255,255,255,0.04),_transparent_55%)]"></div>
 
-        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-24 sm:py-28 lg:py-36">
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-6 lg:px-8 py-20 sm:py-28 lg:py-36">
           <p className="label-premium text-white/70 mb-6">Acervo Digital</p>
-          <h1 className="font-display text-6xl lg:text-7xl font-bold text-white mb-8">
+          <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-bold text-white mb-7 sm:mb-8 leading-[1.06] sm:leading-tight">
             Edições da
             <br />
             <em className="font-serif italic font-normal">Revista</em>
           </h1>
-          <p className="text-lg text-white/78 max-w-2xl font-light mb-10">
+          <p className="text-sm sm:text-lg text-white/78 max-w-2xl font-light mb-8 sm:mb-10 leading-relaxed">
             Explore as edições publicadas da Revista Enfoco. Agora você pode folhear a revista no site ou abrir o PDF completo.
           </p>
 

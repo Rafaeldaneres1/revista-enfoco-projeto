@@ -524,9 +524,9 @@ const Home = () => {
         canonicalPath="/"
         image={activeHeroPost?.featured_image || visibleHomeColumnists[0]?.image}
       />
-      <section className="relative min-h-screen flex flex-col overflow-hidden bg-charcoal">
+      <section className="relative flex flex-col overflow-hidden bg-charcoal">
           {/* Hero Principal - Capa de Revista Premium */}
-          <div className="flex-1 flex items-center relative">
+          <div className="relative flex items-center h-[76svh] min-h-[500px] max-h-[610px] sm:h-[calc(100svh-88px)] sm:min-h-[600px] sm:max-h-[700px] lg:h-[calc(100svh-80px)] lg:min-h-[560px] lg:max-h-[760px] overflow-hidden">
             {/* Background com imagem */}
             <div className="absolute inset-0">
               {activeHeroPost.featured_image ? (
@@ -563,17 +563,17 @@ const Home = () => {
                   />
 
                   {/* Título Principal - Minimalista e Elegante */}
-                  <h1 className="font-hero-cocomat text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-bold mb-8 leading-[1.25] text-balance hero-text-shadow animate-hero-title">
+                  <h1 className="font-hero-cocomat text-[2.35rem] sm:text-4xl lg:text-5xl xl:text-6xl font-bold mb-5 sm:mb-8 leading-[1.08] sm:leading-[1.18] lg:leading-[1.25] text-balance hero-text-shadow animate-hero-title line-clamp-3 sm:line-clamp-4">
                     {sanitizeText(activeHeroPost.title)}
                   </h1>
 
                   {/* Excerpt/Descrição - Minimalista */}
-                  <p className="text-sm sm:text-base lg:text-base mb-10 max-w-md opacity-90 leading-relaxed font-light animate-hero-excerpt">
+                  <p className="text-sm sm:text-base lg:text-base mb-7 sm:mb-10 max-w-md opacity-90 leading-relaxed font-light animate-hero-excerpt line-clamp-3">
                     {sanitizeText(activeHeroPost.excerpt)}
                   </p>
 
                   {/* Botões CTA - Minimalista */}
-                  <div className="flex flex-col sm:flex-row gap-3 mb-8">
+                  <div className="flex flex-col sm:flex-row gap-3 mb-6 sm:mb-8">
                     <Link 
                       to={`/noticias/${activeHeroPost.slug}`} 
                       className="btn-premium-primary rounded-none inline-flex justify-center sm:justify-start items-center gap-2 animate-hero-cta group text-sm py-3 px-6"
@@ -662,7 +662,7 @@ const Home = () => {
                         <div className="h-1 bg-gradient-to-r from-royal-blue to-royal-blue/50"></div>
 
                         {/* Imagem Secundária */}
-                        <div className="aspect-[16/10] overflow-hidden bg-stone-100">
+                        <div className="aspect-[16/9] sm:aspect-[16/10] overflow-hidden bg-stone-100">
                           {post.featured_image ? (
                             <SafeImage
                               src={post.featured_image}
@@ -682,26 +682,26 @@ const Home = () => {
                         </div>
 
                         {/* Conteúdo Secundário */}
-                        <div className="flex flex-col flex-1 p-5 lg:p-6">
+                        <div className="flex flex-col flex-1 p-5 lg:p-6 min-h-[258px] sm:min-h-[278px]">
                           {/* Ícone de Categoria */}
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-3">
                             <CategoryLabel
                               as="p"
                               category={post.category}
                               categoryId={post.category_id}
                               categorySlug={post.category_slug}
                               withDot
-                              className="text-[11px] font-sans tracking-[0.18em] uppercase font-semibold mb-4"
+                              className="text-[11px] font-sans tracking-[0.18em] uppercase font-semibold mb-0"
                             />
                           </div>
 
                           {/* Título */}
-                          <h3 className="font-display font-bold text-charcoal mb-3 leading-tight group-hover:text-royal-blue transition-colors duration-200 text-lg lg:text-xl line-clamp-3 md:min-h-[4.75rem]">
+                          <h3 className="font-display font-bold text-charcoal mb-3 leading-tight group-hover:text-royal-blue transition-colors duration-200 text-xl sm:text-lg lg:text-xl line-clamp-2 sm:line-clamp-3 min-h-[3.25rem] sm:min-h-[4.75rem]">
                             {sanitizeText(post.title)}
                           </h3>
 
                           {/* Excerpt */}
-                          <p className="text-sm text-stone leading-relaxed flex-1 mb-5 line-clamp-2">
+                          <p className="text-sm text-stone leading-relaxed flex-1 mb-5 line-clamp-2 min-h-[2.75rem]">
                             {sanitizeText(post.excerpt)}
                           </p>
 
@@ -800,14 +800,14 @@ const Home = () => {
         </section>
       )}
 
-      <AdBanner position="home_after_highlights" className="py-4 sm:py-8 lg:py-12" />
+      <AdBanner position="home_after_highlights" className="py-3 sm:py-8 lg:py-12" />
 
-      <section className="bg-porcelain py-16 md:py-28">
-        <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <ScrollReveal animation="fadeIn" className="mb-12 md:mb-20">
+      <section className="bg-porcelain py-12 md:py-28">
+        <div className="max-w-7xl mx-auto px-5 sm:px-6 lg:px-8">
+          <ScrollReveal animation="fadeIn" className="mb-10 md:mb-20">
             <p className="label-premium mb-3 md:mb-4">{sanitizeText(homeSettings.recommended_label)}</p>
             <div className="flex justify-between items-end gap-6">
-              <h2 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold text-charcoal leading-[0.95] sm:leading-none">
+              <h2 className="font-display text-3xl sm:text-5xl lg:text-6xl font-bold text-charcoal leading-[0.98] sm:leading-none">
                 {sanitizeText(homeSettings.recommended_title_prefix)}
                 <br />
                 <em className="font-serif italic font-normal">{sanitizeText(homeSettings.recommended_title_emphasis)}</em>
@@ -825,7 +825,7 @@ const Home = () => {
           </ScrollReveal>
 
           {recommendedPosts.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-12">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-12 items-stretch">
               {recommendedPosts.map((post, index) => (
                 <ScrollReveal
                   key={post.id}
@@ -834,7 +834,7 @@ const Home = () => {
                   className="h-full"
                 >
                   <Link to={`/noticias/${post.slug}`} className="group h-full flex flex-col">
-                    <div className="aspect-[4/3] overflow-hidden bg-gray-100 mb-6 shadow-premium-sm group-hover:shadow-premium transition-all duration-500">
+                    <div className="aspect-[16/10] sm:aspect-[4/3] overflow-hidden bg-gray-100 mb-5 sm:mb-6 shadow-premium-sm group-hover:shadow-premium transition-all duration-500">
                       {post.featured_image ? (
                         <SafeImage
                           src={post.featured_image}
@@ -857,14 +857,14 @@ const Home = () => {
                         categorySlug={post.category_slug}
                         className="text-xs font-sans tracking-[0.2em] uppercase mb-4 font-semibold"
                       />
-                      <h3 className="font-display text-xl lg:text-2xl font-bold text-charcoal mb-3 md:mb-4 leading-tight group-hover:text-royal-blue transition-colors duration-200 line-clamp-3 md:min-h-[5.4rem]">
+                      <h3 className="font-display text-xl lg:text-2xl font-bold text-charcoal mb-3 md:mb-4 leading-tight group-hover:text-royal-blue transition-colors duration-200 line-clamp-2 sm:line-clamp-3 min-h-[3.25rem] sm:min-h-[4.85rem] md:min-h-[5.4rem]">
                         {sanitizeText(post.title)}
                       </h3>
-                      <p className="text-sm text-stone leading-relaxed mb-5 line-clamp-2 text-opacity-80 flex-1">
+                      <p className="text-sm text-stone leading-relaxed mb-5 line-clamp-2 text-opacity-80 flex-1 min-h-[2.75rem]">
                         {sanitizeText(post.excerpt)}
                       </p>
                     </div>
-                    <div className="mt-auto flex items-center text-xs text-stone border-t border-gray-200/50 pt-4">
+                    <div className="mt-auto flex items-center text-xs text-stone border-t border-gray-200/50 pt-3 md:pt-4">
                       <span className="font-medium text-charcoal/80">{sanitizeText(post.author_name || '')}</span>
                       <span className="mx-2">•</span>
                       <span>{new Date(post.created_at).toLocaleDateString('pt-BR')}</span>
@@ -910,7 +910,7 @@ const Home = () => {
           </ScrollReveal>
 
           {highlightedColumns.length > 0 ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10 items-stretch">
               {highlightedColumns.map((column, index) => {
                 const columnImage = column.featured_image || column.author_image;
 
@@ -923,7 +923,7 @@ const Home = () => {
                   >
                     <Link to={`/colunas/${column.slug}`} className="group block h-full">
                       <article className="h-full bg-porcelain border border-black/6 shadow-premium-sm transition-all duration-500 group-hover:-translate-y-2 group-hover:shadow-premium flex flex-col overflow-hidden">
-                        <div className="aspect-[16/10] overflow-hidden bg-gray-100">
+                        <div className="aspect-[16/9] sm:aspect-[16/10] overflow-hidden bg-gray-100">
                           {columnImage ? (
                             <SafeImage
                               src={columnImage}
@@ -939,14 +939,14 @@ const Home = () => {
                           )}
                         </div>
 
-                        <div className="p-6 flex flex-col flex-1">
+                        <div className="p-6 flex flex-col flex-1 min-h-[286px]">
                           <p className="text-[11px] font-sans tracking-[0.18em] uppercase text-royal-blue font-semibold mb-4">
                             Coluna
                           </p>
-                          <h3 className="font-display text-2xl font-bold text-charcoal leading-tight mb-3 md:mb-4 group-hover:text-royal-blue transition-colors duration-300 line-clamp-3 md:min-h-[5.7rem]">
+                          <h3 className="font-display text-xl sm:text-2xl font-bold text-charcoal leading-tight mb-3 md:mb-4 group-hover:text-royal-blue transition-colors duration-300 line-clamp-2 sm:line-clamp-3 min-h-[3.25rem] sm:min-h-[5.7rem]">
                             {sanitizeText(column.title)}
                           </h3>
-                          <p className="text-sm text-stone leading-relaxed line-clamp-3 mb-6 flex-1">
+                          <p className="text-sm text-stone leading-relaxed line-clamp-3 mb-6 flex-1 min-h-[4rem]">
                             {sanitizeText(column.excerpt || '')}
                           </p>
                           <div className="flex items-center text-xs text-stone border-t border-black/6 pt-4">

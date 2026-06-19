@@ -1,8 +1,8 @@
 import React from 'react';
 
 const BRAND_LOGOS = {
-  default: '/assets/enfoco-logo-preta-transparente.png?v=7',
-  footer: '/assets/enfoco-logo-branca-transparente.png?v=7'
+  default: '/assets/enfoco-logo-preta-transparente.webp?v=8',
+  footer: '/assets/enfoco-logo-branca-transparente.webp?v=8'
 };
 
 const Logo = ({ className = '', variant = 'default', animationKey = '' }) => {

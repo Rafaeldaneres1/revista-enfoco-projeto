@@ -90,9 +90,9 @@ const FloatingWhatsApp = () => {
       rel="noopener noreferrer"
       aria-label="Falar com a Revista Enfoco no WhatsApp"
       title="Falar no WhatsApp"
-      className="fixed bottom-5 left-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full bg-black text-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] ring-1 ring-white/20 transition-all duration-300 hover:-translate-y-1 hover:bg-charcoal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-royal-blue sm:bottom-7 sm:left-7 sm:h-16 sm:w-16"
+      className="fixed bottom-4 left-4 z-[70] inline-flex h-12 w-12 items-center justify-center rounded-full bg-black text-white shadow-[0_18px_45px_rgba(0,0,0,0.28)] ring-1 ring-white/20 transition-all duration-300 hover:-translate-y-1 hover:bg-charcoal focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-royal-blue sm:bottom-7 sm:left-7 sm:h-16 sm:w-16"
     >
-      <WhatsAppLogo className="h-7 w-7 sm:h-8 sm:w-8" />
+      <WhatsAppLogo className="h-6 w-6 sm:h-8 sm:w-8" />
     </a>
   );
 };
