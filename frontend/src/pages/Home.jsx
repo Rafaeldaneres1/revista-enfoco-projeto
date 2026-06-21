@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { fetchJson, HAS_BACKEND } from '../lib/publicApi';
 import { siteContent } from '../data/siteContent';
-import { buildFallbackHomeData } from '../data/initialContent';
 import CategoryLabel from '../components/CategoryLabel';
 import SafeImage from '../components/SafeImage';
 import ScrollReveal from '../components/ScrollReveal';
@@ -101,7 +99,8 @@ const buildColumnistsFromColumns = (columns = []) => {
   return Array.from(columnistsMap.values());
 };
 
-const buildFallbackHomeDataWithColumnists = () => {
+const loadFallbackHomeDataWithColumnists = async () => {
+  const { buildFallbackHomeData } = await import('../data/initialContent');
   const fallbackHomeData = buildFallbackHomeData();
   return {
     ...fallbackHomeData,
@@ -137,50 +136,10 @@ const normalizeHomePayload = (data) => {
   };
 };
 
-const getColumnKey = (column) => column?.id || column?.slug || column?.title;
-
 const getColumnTime = (column) => {
   const rawDate = column?.created_at || column?.updated_at || column?.published_at;
   const timestamp = rawDate ? new Date(rawDate).getTime() : 0;
   return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const mergeHomeColumns = (homeColumns = [], publishedColumns = []) => {
-  const mergedColumns = [];
-  const usedColumnKeys = new Set();
-
-  homeColumns.filter(Boolean).forEach((column) => {
-    const key = getColumnKey(column);
-    if (!key || usedColumnKeys.has(key)) {
-      return;
-    }
-
-    mergedColumns.push(column);
-    usedColumnKeys.add(key);
-  });
-
-  publishedColumns
-    .filter(Boolean)
-    .sort((a, b) => getColumnTime(b) - getColumnTime(a))
-    .forEach((column) => {
-      const key = getColumnKey(column);
-      if (!key || usedColumnKeys.has(key)) {
-        return;
-      }
-
-      mergedColumns.push(column);
-      usedColumnKeys.add(key);
-    });
-
-  return mergedColumns;
-};
-
-const fetchPublishedColumns = async () => {
-  const response = await axios.get(apiUrl('/api/columns?published=true&limit=500'), {
-    timeout: 20000
-  });
-
-  return Array.isArray(response.data) ? response.data : [];
 };
 
 const EMPTY_HOME_DATA = {
@@ -246,11 +205,7 @@ const writeHomeCache = (homeData, homeSettings) => {
 
 const Home = () => {
   const [homeData, setHomeData] = useState(() => {
-    if (!HAS_BACKEND) {
-      return buildFallbackHomeDataWithColumnists();
-    }
-
-    const cachedHome = readHomeCache();
+    const cachedHome = HAS_BACKEND ? readHomeCache() : null;
     return cachedHome?.homeData || EMPTY_HOME_DATA;
   });
   const [homeSettings, setHomeSettings] = useState(() => {
@@ -276,7 +231,7 @@ const Home = () => {
   useEffect(() => {
     const fetchHomeData = async () => {
       if (!HAS_BACKEND) {
-        setHomeData(buildFallbackHomeDataWithColumnists());
+        setHomeData(await loadFallbackHomeDataWithColumnists());
         setHomeSettings(buildFallbackHomeSettings());
         setIsHomeLoading(false);
         return;
@@ -285,9 +240,14 @@ const Home = () => {
       try {
         LEGACY_HOME_CACHE_KEYS.forEach((key) => window.localStorage.removeItem(key));
 
+        const bootstrapHomePromise = window.__ENFOCO_HOME_BOOTSTRAP_PROMISE__;
+        const initialHomeRequest = bootstrapHomePromise
+          ? bootstrapHomePromise.then((data) => ({ data }))
+          : fetchJson('/api/home-lite', { timeout: 8000 }).then((data) => ({ data }));
+
         const [homeResponse, settingsResponse] = await Promise.allSettled([
-          axios.get(apiUrl('/api/home-lite'), { timeout: 8000 }),
-          axios.get(apiUrl('/api/home-settings'), { timeout: 15000 })
+          initialHomeRequest,
+          fetchJson('/api/home-settings', { timeout: 15000 }).then((data) => ({ data }))
         ]);
 
         let nextHomeData = null;
@@ -320,48 +280,6 @@ const Home = () => {
           writeHomeCache(nextHomeData, nextHomeSettings);
         }
 
-        const loadFullHome = async () => {
-          try {
-            const [fullHomeResponse, publishedColumnsResponse] = await Promise.allSettled([
-              axios.get(apiUrl('/api/home'), { timeout: 20000 }),
-              fetchPublishedColumns()
-            ]);
-
-            const normalizedFullHomeData =
-              fullHomeResponse.status === 'fulfilled'
-                ? normalizeHomePayload(fullHomeResponse.value.data)
-                : null;
-
-            if (normalizedFullHomeData) {
-              const publishedColumns =
-                publishedColumnsResponse.status === 'fulfilled'
-                  ? publishedColumnsResponse.value
-                  : [];
-              const mergedFullHomeData = {
-                ...normalizedFullHomeData,
-                columns: mergeHomeColumns(normalizedFullHomeData.columns, publishedColumns)
-              };
-
-              setHomeData(mergedFullHomeData);
-              writeHomeCache(mergedFullHomeData, nextHomeSettings);
-              return mergedFullHomeData;
-            }
-          } catch (error) {
-            console.warn('Full home refresh skipped:', error);
-          }
-
-          return null;
-        };
-
-        if (hasInitialHomeData) {
-          if ('requestIdleCallback' in window) {
-            window.requestIdleCallback(loadFullHome, { timeout: 4000 });
-          } else {
-            window.setTimeout(loadFullHome, 1800);
-          }
-        } else {
-          await loadFullHome();
-        }
       } catch (error) {
         console.error('Error fetching home data:', error);
         const cachedHome = readHomeCache();

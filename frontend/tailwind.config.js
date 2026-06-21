@@ -2,8 +2,14 @@
 module.exports = {
     darkMode: ["class"],
     content: [
+    "./index.html",
     "./src/**/*.{js,jsx,ts,tsx}",
-    "./public/index.html"
+    "!./src/AdminApp.jsx",
+    "!./src/pages/Admin*.jsx",
+    "!./src/components/Admin*.jsx",
+    "!./src/components/PrivateRoute.jsx",
+    "!./src/components/RichTextEditor.jsx",
+    "!./src/context/AuthContext.jsx"
   ],
   theme: {
         extend: {

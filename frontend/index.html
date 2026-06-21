@@ -39,9 +39,73 @@
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=Nunito:wght@300;400;600;700;800;900&display=swap"
       />
     </noscript>
-    <link rel="preconnect" href="https://revista-enfoco-api.onrender.com" crossorigin />
-    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
-    <link rel="preconnect" href="https://public.blob.vercel-storage.com" crossorigin />
+    <link rel="dns-prefetch" href="//revista-enfoco-api.onrender.com" />
+    <link rel="preconnect" href="https://revista-enfoco-api.onrender.com" crossorigin="anonymous" fetchpriority="high" />
+    <link rel="dns-prefetch" href="//res.cloudinary.com" />
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin="anonymous" />
+    <script>
+      (function () {
+        var configuredBackend = '%VITE_BACKEND_URL%';
+        if (!configuredBackend || configuredBackend.indexOf('%VITE_') === 0) {
+          return;
+        }
+
+        var backendUrl = configuredBackend.replace(/\/$/, '');
+        var responsiveWidths = [320, 480, 640, 768, 960, 1200, 1600, 1920, 2560, 3200];
+        var isCloudinaryImage = function (url) {
+          return /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//i.test(url || '');
+        };
+        var buildHeroUrl = function (url, width) {
+          return url.replace(
+            '/image/upload/',
+            '/image/upload/f_auto,q_auto:eco,c_limit,w_' + width + '/'
+          );
+        };
+
+        window.__ENFOCO_HOME_BOOTSTRAP_PROMISE__ = fetch(backendUrl + '/api/home-lite', {
+          credentials: 'include',
+          headers: { Accept: 'application/json' }
+        })
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error('Home bootstrap failed');
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            var firstHero = data && data.hero_posts && data.hero_posts[0];
+            var heroImage = firstHero && firstHero.featured_image;
+
+            if (heroImage && !document.querySelector('link[data-enfoco-hero-preload]')) {
+              var preload = document.createElement('link');
+              preload.rel = 'preload';
+              preload.as = 'image';
+              preload.href = heroImage;
+              preload.setAttribute('fetchpriority', 'high');
+              preload.setAttribute('data-enfoco-hero-preload', 'true');
+
+              if (isCloudinaryImage(heroImage)) {
+                preload.setAttribute(
+                  'imagesrcset',
+                  responsiveWidths
+                    .map(function (width) {
+                      return buildHeroUrl(heroImage, width) + ' ' + width + 'w';
+                    })
+                    .join(', ')
+                );
+                preload.setAttribute('imagesizes', '100vw');
+              }
+
+              document.head.appendChild(preload);
+            }
+
+            return data;
+          })
+          .catch(function () {
+            return null;
+          });
+      })();
+    </script>
     <link rel="icon" href="/favicon.ico?v=3" sizes="any" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />

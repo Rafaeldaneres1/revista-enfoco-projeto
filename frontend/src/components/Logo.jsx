@@ -21,6 +21,8 @@ const Logo = ({ className = '', variant = 'default', animationKey = '' }) => {
       key={animationKey || variant}
       src={logoSrc}
       alt="Revista Enfoco"
+      width="320"
+      height="92"
       className={`block w-auto max-w-full object-contain bg-transparent ${logoHeightClass} ${className}`}
     />
   );

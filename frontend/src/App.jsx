@@ -1,14 +1,9 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import './App.css';
 import Header from './components/Header';
 import Footer from './components/Footer';
-import FloatingWhatsApp from './components/FloatingWhatsApp';
-import BackToTopButton from './components/BackToTopButton';
-import PrivacyConsent from './components/PrivacyConsent';
 import ScrollToTop from './components/ScrollToTop';
-import PrivateRoute from './components/PrivateRoute';
-import { AuthProvider } from './context/AuthContext';
 
 const Home = lazy(() => import('./pages/Home'));
 const About = lazy(() => import('./pages/About'));
@@ -24,31 +19,10 @@ const EditionReaderPage = lazy(() => import('./pages/EditionReaderPage'));
 const TVProgramsPage = lazy(() => import('./pages/TVProgramsPage'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
-
-const AdminLogin = lazy(() => import('./pages/AdminLogin'));
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
-const AdminPosts = lazy(() => import('./pages/AdminPosts'));
-const AdminPostForm = lazy(() => import('./pages/AdminPostForm'));
-const AdminColumns = lazy(() => import('./pages/AdminColumns'));
-const AdminColumnForm = lazy(() => import('./pages/AdminColumnForm'));
-const AdminColumnists = lazy(() => import('./pages/AdminColumnists'));
-const AdminColumnistForm = lazy(() => import('./pages/AdminColumnistForm'));
-const AdminEvents = lazy(() => import('./pages/AdminEvents'));
-const AdminEventForm = lazy(() => import('./pages/AdminEventForm'));
-const AdminEditions = lazy(() => import('./pages/AdminEditions'));
-const AdminEditionForm = lazy(() => import('./pages/AdminEditionForm'));
-const AdminAboutForm = lazy(() => import('./pages/AdminAboutForm'));
-const AdminHomeForm = lazy(() => import('./pages/AdminHomeForm'));
-const AdminTeams = lazy(() => import('./pages/AdminTeams'));
-const AdminTeamForm = lazy(() => import('./pages/AdminTeamForm'));
-const AdminCategories = lazy(() => import('./pages/AdminCategories'));
-const AdminCategoryForm = lazy(() => import('./pages/AdminCategoryForm'));
-const AdminBanners = lazy(() => import('./pages/AdminBanners'));
-const AdminBannerForm = lazy(() => import('./pages/AdminBannerForm'));
-const AdminTVPrograms = lazy(() => import('./pages/AdminTVPrograms'));
-const AdminTVProgramForm = lazy(() => import('./pages/AdminTVProgramForm'));
-const AdminComments = lazy(() => import('./pages/AdminComments'));
-const AdminPrivacyForm = lazy(() => import('./pages/AdminPrivacyForm'));
+const FloatingWhatsApp = lazy(() => import('./components/FloatingWhatsApp'));
+const BackToTopButton = lazy(() => import('./components/BackToTopButton'));
+const PrivacyConsent = lazy(() => import('./components/PrivacyConsent'));
+const AdminApp = lazy(() => import('./AdminApp'));
 
 function LegacyPostRedirect() {
   const { slug } = useParams();
@@ -68,21 +42,44 @@ function PageLoader() {
   );
 }
 
-function ConditionalAuthProvider({ children }) {
+function DeferredPublicUtilities() {
   const location = useLocation();
-  if (location.pathname.startsWith('/admin')) {
-    return <AuthProvider>{children}</AuthProvider>;
+  const isAdmin = location.pathname.startsWith('/admin');
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setReady(false);
+      return undefined;
+    }
+
+    if ('requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(() => setReady(true), { timeout: 1800 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(() => setReady(true), 900);
+    return () => window.clearTimeout(timeoutId);
+  }, [isAdmin]);
+
+  if (!ready || isAdmin) {
+    return null;
   }
 
-  return children;
+  return (
+    <Suspense fallback={null}>
+      <BackToTopButton />
+      <FloatingWhatsApp />
+      <PrivacyConsent />
+    </Suspense>
+  );
 }
 
 function App() {
   return (
     <Router>
-      <ConditionalAuthProvider>
-        <ScrollToTop />
-        <div className="App min-h-screen flex flex-col">
+      <ScrollToTop />
+      <div className="App min-h-screen flex flex-col">
           <Header />
           <main className="flex-1">
             <Suspense fallback={<PageLoader />}>
@@ -105,48 +102,13 @@ function App() {
                 <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 <Route path="/politica-de-cookies" element={<CookiePolicyPage />} />
 
-                <Route path="/admin" element={<AdminLogin />} />
-                <Route path="/admin/dashboard" element={<PrivateRoute><AdminDashboard /></PrivateRoute>} />
-                <Route path="/admin/posts" element={<PrivateRoute><AdminPosts /></PrivateRoute>} />
-                <Route path="/admin/posts/new" element={<PrivateRoute><AdminPostForm /></PrivateRoute>} />
-                <Route path="/admin/posts/edit/:id" element={<PrivateRoute><AdminPostForm /></PrivateRoute>} />
-                <Route path="/admin/columns" element={<PrivateRoute><AdminColumns /></PrivateRoute>} />
-                <Route path="/admin/columns/new" element={<PrivateRoute><AdminColumnForm /></PrivateRoute>} />
-                <Route path="/admin/columns/edit/:id" element={<PrivateRoute><AdminColumnForm /></PrivateRoute>} />
-                <Route path="/admin/columns/columnists" element={<PrivateRoute><AdminColumnists /></PrivateRoute>} />
-                <Route path="/admin/columns/columnists/new" element={<PrivateRoute><AdminColumnistForm /></PrivateRoute>} />
-                <Route path="/admin/columns/columnists/edit/:id" element={<PrivateRoute><AdminColumnistForm /></PrivateRoute>} />
-                <Route path="/admin/events" element={<PrivateRoute><AdminEvents /></PrivateRoute>} />
-                <Route path="/admin/events/new" element={<PrivateRoute><AdminEventForm /></PrivateRoute>} />
-                <Route path="/admin/events/edit/:id" element={<PrivateRoute><AdminEventForm /></PrivateRoute>} />
-                <Route path="/admin/editions" element={<PrivateRoute><AdminEditions /></PrivateRoute>} />
-                <Route path="/admin/editions/new" element={<PrivateRoute><AdminEditionForm /></PrivateRoute>} />
-                <Route path="/admin/editions/edit/:id" element={<PrivateRoute><AdminEditionForm /></PrivateRoute>} />
-                <Route path="/admin/home" element={<PrivateRoute><AdminHomeForm /></PrivateRoute>} />
-                <Route path="/admin/about" element={<PrivateRoute><AdminAboutForm /></PrivateRoute>} />
-                <Route path="/admin/team" element={<PrivateRoute><AdminTeams /></PrivateRoute>} />
-                <Route path="/admin/team/new" element={<PrivateRoute><AdminTeamForm /></PrivateRoute>} />
-                <Route path="/admin/team/edit/:id" element={<PrivateRoute><AdminTeamForm /></PrivateRoute>} />
-                <Route path="/admin/categories" element={<PrivateRoute><AdminCategories /></PrivateRoute>} />
-                <Route path="/admin/categories/new" element={<PrivateRoute><AdminCategoryForm /></PrivateRoute>} />
-                <Route path="/admin/categories/edit/:id" element={<PrivateRoute><AdminCategoryForm /></PrivateRoute>} />
-                <Route path="/admin/banners" element={<PrivateRoute><AdminBanners /></PrivateRoute>} />
-                <Route path="/admin/banners/new" element={<PrivateRoute><AdminBannerForm /></PrivateRoute>} />
-                <Route path="/admin/banners/edit/:id" element={<PrivateRoute><AdminBannerForm /></PrivateRoute>} />
-                <Route path="/admin/tv-programs" element={<PrivateRoute><AdminTVPrograms /></PrivateRoute>} />
-                <Route path="/admin/tv-programs/new" element={<PrivateRoute><AdminTVProgramForm /></PrivateRoute>} />
-                <Route path="/admin/tv-programs/edit/:id" element={<PrivateRoute><AdminTVProgramForm /></PrivateRoute>} />
-                <Route path="/admin/comments" element={<PrivateRoute><AdminComments /></PrivateRoute>} />
-                <Route path="/admin/privacy" element={<PrivateRoute><AdminPrivacyForm /></PrivateRoute>} />
+                <Route path="/admin/*" element={<AdminApp />} />
               </Routes>
             </Suspense>
           </main>
           <Footer />
-          <BackToTopButton />
-          <FloatingWhatsApp />
-          <PrivacyConsent />
-        </div>
-      </ConditionalAuthProvider>
+          <DeferredPublicUtilities />
+      </div>
     </Router>
   );
 }

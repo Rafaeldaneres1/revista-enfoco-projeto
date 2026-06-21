@@ -32,6 +32,8 @@ const PremiumPostCard = ({
       <img
         src={post.image}
         alt={post.title}
+        width="1200"
+        height="800"
         className={`w-full ${imageSizeClasses[size]} object-cover hover:scale-105 transition-transform duration-500`}
       />
     </Parallax>
@@ -39,6 +41,8 @@ const PremiumPostCard = ({
     <img
       src={post.image}
       alt={post.title}
+      width="1200"
+      height="800"
       className={`w-full ${imageSizeClasses[size]} object-cover rounded-lg hover:scale-105 transition-transform duration-500`}
     />
   );

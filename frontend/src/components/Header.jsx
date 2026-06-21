@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import axios from 'axios';
 import Logo from './Logo';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { HAS_BACKEND, apiUrl } from '../lib/publicApi';
 import { readPublicCache, writePublicCache } from '../lib/publicDataCache';
 import { prefetchPublicRoute, prefetchPublicRoutesOnIdle, PUBLIC_PREFETCH_ROUTES } from '../lib/publicPrefetch';
 
@@ -28,8 +27,12 @@ const Header = () => {
 
     const fetchLatestEdition = async () => {
       try {
-        const response = await axios.get(apiUrl('/api/editions?published=true&compact=true&limit=1'));
-        const editions = Array.isArray(response.data) ? response.data : [];
+        const response = await fetch(apiUrl('/api/editions?published=true&compact=true&limit=1'));
+        if (!response.ok) {
+          throw new Error('Latest edition unavailable');
+        }
+        const payload = await response.json();
+        const editions = Array.isArray(payload) ? payload : [];
         const latestEdition = editions.find((edition) => edition?.slug);
 
         if (isMounted && latestEdition) {

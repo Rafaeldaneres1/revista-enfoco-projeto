@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { Link, useLocation } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -11,7 +10,7 @@ import {
   Phone
 } from 'lucide-react';
 import Logo from './Logo';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { HAS_BACKEND, apiUrl } from '../lib/publicApi';
 import { PRIVACY_PREFERENCES_EVENT } from '../lib/privacyConsent';
 import { siteContent } from '../data/siteContent';
 
@@ -117,8 +116,11 @@ const Footer = () => {
 
     const fetchFooterContact = async () => {
       try {
-        const response = await axios.get(apiUrl('/api/about'));
-        const about = response.data || {};
+        const response = await fetch(apiUrl('/api/about'));
+        if (!response.ok) {
+          throw new Error('Footer contact unavailable');
+        }
+        const about = (await response.json()) || {};
 
         setFooterData((current) => ({
           contact_email: getValue(about.contact_email) || current.contact_email,

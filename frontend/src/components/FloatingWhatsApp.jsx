@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
 import { useLocation } from 'react-router-dom';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { fetchJson, HAS_BACKEND } from '../lib/publicApi';
 import { siteContent } from '../data/siteContent';
 
 const getValue = (value) => (typeof value === 'string' ? value.trim() : '');
@@ -63,8 +62,7 @@ const FloatingWhatsApp = () => {
 
     const fetchContact = async () => {
       try {
-        const response = await axios.get(apiUrl('/api/about'));
-        const about = response.data || {};
+        const about = (await fetchJson('/api/about')) || {};
         const nextContact = getValue(about.social?.whatsapp) || getValue(about.contact_phone);
         if (nextContact) {
           setWhatsappContact(nextContact);

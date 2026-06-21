@@ -139,6 +139,8 @@ const AdminMediaLibrary = ({ onSelectImage, onClose }) => {
                   <img
                     src={image.url}
                     alt={image.name}
+                    width="800"
+                    height="800"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">

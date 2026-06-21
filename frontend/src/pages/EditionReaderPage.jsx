@@ -291,6 +291,8 @@ const EditionReaderPage = () => {
                       <SafeImage
                         src={page}
                         alt={`Miniatura página ${index + 1}`}
+                        width={400}
+                        height={600}
                         className="w-full h-auto block"
                       />
                     </button>
@@ -330,6 +332,8 @@ const EditionReaderPage = () => {
                       <SafeImage
                         src={currentImage}
                         alt={`Página ${currentPage + 1} da ${sanitizeText(edition.title)}`}
+                        width={1200}
+                        height={1800}
                         className="block w-full h-auto max-w-[980px]"
                       />
                     </div>

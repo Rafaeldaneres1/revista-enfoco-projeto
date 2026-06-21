@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { fetchJson, HAS_BACKEND } from '../lib/publicApi';
 import { normalizeEditorialText } from '../lib/text';
 import { readPublicCache, writePublicCache } from '../lib/publicDataCache';
 
@@ -61,10 +60,9 @@ const fetchCategories = async () => {
   }
 
   if (!pendingCategoriesRequest) {
-    pendingCategoriesRequest = axios
-      .get(apiUrl('/api/categories?active=true'))
-      .then((response) => {
-        cachedCategories = Array.isArray(response.data) ? response.data : [];
+    pendingCategoriesRequest = fetchJson('/api/categories?active=true')
+      .then((payload) => {
+        cachedCategories = Array.isArray(payload) ? payload : [];
         writePublicCache(CATEGORY_CACHE_KEY, cachedCategories);
         return cachedCategories;
       })

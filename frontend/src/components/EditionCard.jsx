@@ -10,6 +10,8 @@ const EditionCard = ({ edition }) => {
           <SafeImage
             src={edition.cover_image}
             alt={edition.title}
+            width={800}
+            height={1200}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </div>

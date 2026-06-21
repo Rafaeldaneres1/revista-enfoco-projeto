@@ -234,6 +234,8 @@ const EditionsPage = () => {
                       <SafeImage
                         src={getEditionPreviewImage(latestEdition)}
                         alt={sanitizeText(latestEdition.title)}
+                        width={800}
+                        height={1200}
                         className="block w-full h-auto transition-transform duration-700 group-hover:scale-[1.01]"
                       />
                     </div>
@@ -269,6 +271,8 @@ const EditionsPage = () => {
                       <SafeImage
                         src={getEditionPreviewImage(edition)}
                         alt={sanitizeText(edition.title)}
+                        width={800}
+                        height={1200}
                         className="w-full h-auto rounded-[20px] transition-transform duration-500 group-hover:scale-[1.02]"
                       />
                     ) : (

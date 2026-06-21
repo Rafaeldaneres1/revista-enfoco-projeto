@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { HAS_BACKEND, apiUrl } from '../lib/api';
+import { fetchJson, HAS_BACKEND } from '../lib/publicApi';
 import { readPublicCache, writePublicCache } from '../lib/publicDataCache';
 import SafeImage from './SafeImage';
 
@@ -42,10 +41,10 @@ const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx
       }
 
       try {
-        const response = await axios.get(
-          apiUrl(`/api/banners?position=${encodeURIComponent(position)}`)
+        const payload = await fetchJson(
+          `/api/banners?position=${encodeURIComponent(position)}`
         );
-        const banners = Array.isArray(response.data) ? response.data : [];
+        const banners = Array.isArray(payload) ? payload : [];
         const firstBanner = banners[0] || null;
         bannerCache.set(position, firstBanner);
         writePublicCache(getBannerCacheKey(position), firstBanner);
@@ -101,6 +100,8 @@ const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx
         <SafeImage
           src={banner.mobile_image}
           alt={banner.title || 'Publicidade'}
+          width={800}
+          height={300}
           className="block w-full max-h-[240px] object-contain sm:hidden"
           loading="lazy"
           decoding="async"
@@ -111,6 +112,8 @@ const AdBanner = ({ position, className = '', containerClassName = 'max-w-7xl mx
       <SafeImage
         src={banner.image}
         alt={banner.title || 'Publicidade'}
+        width={1400}
+        height={300}
         className={`${hasMobileImage ? 'hidden sm:block' : 'block'} w-full max-h-[160px] object-contain sm:max-h-[220px] lg:max-h-[280px]`}
         loading="lazy"
         decoding="async"

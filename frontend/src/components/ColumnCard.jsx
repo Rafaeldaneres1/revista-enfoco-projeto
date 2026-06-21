@@ -13,6 +13,8 @@ const ColumnCard = ({ column }) => {
             <SafeImage
               src={column.featured_image}
               alt={column.title}
+              width={1200}
+              height={900}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
             />
           </div>

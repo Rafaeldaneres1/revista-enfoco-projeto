@@ -1,6 +1,6 @@
 import React from 'react';
 import { Helmet } from 'react-helmet';
-import { resolveAssetUrl } from '../lib/api';
+import { resolveAssetUrl } from '../lib/mediaUrls';
 
 const SITE_NAME = 'Revista Enfoco';
 const SITE_LOCALE = 'pt_BR';

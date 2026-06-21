@@ -144,7 +144,13 @@ const AdminPostFormEnhanced = ({ post = {}, onSave = () => {} }) => {
               placeholder="URL da imagem"
             />
             {formData.image && (
-              <img src={formData.image} alt="Preview" className="w-full h-48 object-cover rounded-lg" />
+              <img
+                src={formData.image}
+                alt="Preview"
+                width="1200"
+                height="675"
+                className="w-full h-48 object-cover rounded-lg"
+              />
             )}
           </div>
 

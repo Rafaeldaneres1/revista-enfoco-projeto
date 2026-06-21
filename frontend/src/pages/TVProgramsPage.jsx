@@ -140,6 +140,8 @@ const TVProgramsPage = () => {
                     <SafeImage
                       src={getVideoImage(program)}
                       alt={program.title}
+                      width={1280}
+                      height={720}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     />
                   </div>

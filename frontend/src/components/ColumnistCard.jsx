@@ -31,6 +31,8 @@ const ColumnistCard = ({ columnist, compact = false, priority = false }) => {
             <SafeImage
               src={columnist.image}
               alt={name}
+              width={1200}
+              height={900}
               className="w-full aspect-[4/3] object-cover object-[center_24%] transition-transform duration-700 group-hover:scale-[1.05]"
               loading={priority ? 'eager' : 'lazy'}
               decoding="async"

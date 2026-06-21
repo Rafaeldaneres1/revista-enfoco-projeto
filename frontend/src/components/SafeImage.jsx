@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { resolveAssetUrl } from '../lib/api';
+import { resolveAssetUrl } from '../lib/mediaUrls';
 
 const FALLBACK_IMAGE =
   "data:image/svg+xml;charset=UTF-8," +
@@ -14,6 +14,14 @@ const FALLBACK_IMAGE =
   );
 
 const RESPONSIVE_WIDTHS = [320, 480, 640, 768, 960, 1200, 1600, 1920, 2560, 3200];
+
+const INTRINSIC_DIMENSIONS = {
+  avatar: { width: 512, height: 512 },
+  hero: { width: 1920, height: 1080 },
+  article: { width: 1600, height: 1200 },
+  card: { width: 1200, height: 900 },
+  default: { width: 1200, height: 900 },
+};
 
 const isCloudinaryImage = (value = '') =>
   /^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//i.test(value);
@@ -65,6 +73,8 @@ const SafeImage = ({
   fetchPriority,
   sizes,
   cloudinaryVariant,
+  width,
+  height,
   preventUpscale = false,
   onError,
   onLoad,
@@ -92,6 +102,8 @@ const SafeImage = ({
     return null;
   }
 
+  const intrinsicDimensions = INTRINSIC_DIMENSIONS[cloudinaryVariant] || INTRINSIC_DIMENSIONS.default;
+
   return (
     <img
       {...props}
@@ -99,6 +111,8 @@ const SafeImage = ({
       srcSet={currentSrcSet}
       sizes={currentSrcSet ? sizes : undefined}
       alt={alt}
+      width={width || intrinsicDimensions.width}
+      height={height || intrinsicDimensions.height}
       className={className}
       loading={loading}
       decoding={decoding}

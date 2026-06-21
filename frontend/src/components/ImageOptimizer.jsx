@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const ImageOptimizer = ({ src, alt, className, width, height, priority = false }) => {
+const ImageOptimizer = ({ src, alt, className, width = 1200, height = 800, priority = false }) => {
   const [imageSrc, setImageSrc] = useState(src);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);

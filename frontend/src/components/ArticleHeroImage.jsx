@@ -14,6 +14,8 @@ const ArticleHeroImage = ({
       <SafeImage
         src={src}
         alt={alt}
+        width={1920}
+        height={1080}
         className="w-full h-full object-cover"
         style={{ objectPosition }}
         loading="eager"

@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { HAS_BACKEND, apiUrl } from './api';
+import { HAS_BACKEND, apiUrl } from './publicApi';
 import { readPublicCache, writePublicCache } from './publicDataCache';
 
 export const PUBLIC_PREFETCH_ROUTES = {
@@ -38,10 +37,15 @@ export const prefetchPublicRoute = async (path) => {
     return pendingPrefetches.get(path);
   }
 
-  const request = axios
-    .get(apiUrl(config.endpoint))
+  const request = fetch(apiUrl(config.endpoint))
     .then((response) => {
-      const data = Array.isArray(response.data) ? response.data : [];
+      if (!response.ok) {
+        throw new Error('Prefetch unavailable');
+      }
+      return response.json();
+    })
+    .then((payload) => {
+      const data = Array.isArray(payload) ? payload : [];
       writePublicCache(config.cacheKey, data);
       return data;
     })
