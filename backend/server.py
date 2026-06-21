@@ -8,6 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import pymongo
+import asyncio
 import os
 import logging
 import re
@@ -2433,19 +2434,34 @@ async def build_home_columns(settings: Optional[dict], latest_columns_limit: Opt
         ordered_columns.append(selected_column)
         used_column_ids.add(column_id)
 
+    if latest_columns_limit:
+        return ordered_columns[:latest_columns_limit]
+
     return ordered_columns
 
 @api_router.get("/home-lite")
 async def get_home_lite_data():
     settings = await db.home_settings.find_one({"id": "home-page"}, {"_id": 0})
-    featured_post, recent_posts, recommended_posts = await build_home_post_groups(settings, latest_posts_limit=24)
-    hero_posts = await build_home_hero_posts(settings)
-    highlighted_columns = await build_home_columns(settings)
-
-    latest_editions = await db.editions.find(
-        {"published": True},
-        {"_id": 0, "reader_pages": 0, "pages_base_path": 0}
-    ).sort("edition_number", -1).limit(4).to_list(4)
+    (
+        post_groups,
+        hero_posts,
+        highlighted_columns,
+        latest_editions,
+        home_columnists,
+    ) = await asyncio.gather(
+        build_home_post_groups(settings, latest_posts_limit=24),
+        build_home_hero_posts(settings),
+        build_home_columns(settings, latest_columns_limit=12),
+        db.editions.find(
+            {"published": True},
+            {"_id": 0, "reader_pages": 0, "pages_base_path": 0}
+        ).sort("edition_number", -1).limit(4).to_list(4),
+        db.columnists.find(
+            {},
+            {"_id": 0, "name": 1, "role": 1, "bio": 1, "image": 1, "slug": 1, "id": 1, "created_at": 1, "updated_at": 1}
+        ).sort([("name", 1), ("created_at", -1)]).limit(8).to_list(8),
+    )
+    featured_post, recent_posts, recommended_posts = post_groups
     for edition in latest_editions:
         serialize_datetimes(edition, "created_at", "updated_at")
 
@@ -2457,10 +2473,6 @@ async def get_home_lite_data():
     if featured_edition and featured_edition_override_image:
         featured_edition["cover_image"] = featured_edition_override_image
 
-    home_columnists = await db.columnists.find(
-        {},
-        {"_id": 0, "name": 1, "role": 1, "bio": 1, "image": 1, "slug": 1, "id": 1, "created_at": 1, "updated_at": 1}
-    ).sort([("name", 1), ("created_at", -1)]).limit(8).to_list(8)
     home_columnists = await ensure_columnist_slugs(home_columnists)
 
     return {
@@ -2486,7 +2498,7 @@ async def get_home_data():
     settings = await db.home_settings.find_one({"id": "home-page"}, {"_id": 0})
 
     # Get latest post
-    latest_posts = await db.posts.find({"published": True}, post_card_projection).sort("created_at", -1).to_list(80)
+    latest_posts = await db.posts.find({"published": True}, post_card_projection).sort("created_at", -1).limit(24).to_list(24)
 
     # Get latest columns
     latest_columns = await db.columns.find({"published": True}, column_card_projection).sort("created_at", -1).limit(12).to_list(12)
@@ -2654,7 +2666,7 @@ async def get_home_data():
             if len(ordered_editions) >= 6:
                 break
 
-    ordered_columns = await build_home_columns(settings)
+    ordered_columns = await build_home_columns(settings, latest_columns_limit=12)
     hero_posts = await build_home_hero_posts(settings)
 
     return {
